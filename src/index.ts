@@ -6,6 +6,8 @@ import {
   eventsTableDDL,
   listEventsInRange,
 } from "./events";
+import { reconcile } from "./reconcile";
+import { handleSyncWebhook, sendWebhook } from "./sync";
 import { loginPage, monthView } from "./views";
 
 const json = (body: unknown, status = 200): Response =>
@@ -76,6 +78,18 @@ const monthRange = (
 const isValidDate = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 export default {
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const result = await reconcile(env);
+          console.log("[reconcile]", JSON.stringify(result));
+        } catch (err) {
+          console.error("[reconcile] failed", err);
+        }
+      })()
+    );
+  },
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const auth = createAuth(env);
@@ -122,6 +136,19 @@ export default {
         // ignore
       }
       return html(loginPage(isSignup ? "signup" : "signin", msg), innerRes.status);
+    }
+
+    if (url.pathname === "/sync/webhook" && request.method === "POST") {
+      return handleSyncWebhook(env, request);
+    }
+
+    if (url.pathname === "/admin/reconcile" && request.method === "POST") {
+      const token = url.searchParams.get("token");
+      if (!token || token !== env.BETTER_AUTH_SECRET) {
+        return json({ error: "unauthorized" }, 401);
+      }
+      const result = await reconcile(env);
+      return json(result);
     }
 
     if (url.pathname === "/health") {
@@ -220,6 +247,21 @@ export default {
           start_time: body.start_time ?? null,
           description: body.description ?? null,
         });
+        await sendWebhook(env, {
+          op: "upsert",
+          from: "cal",
+          user_email: session.user.email,
+          source_id: created.id,
+          target_id: null,
+          updated_at: created.updated_at,
+          event: {
+            title: created.title,
+            event_date: created.event_date,
+            start_time: created.start_time,
+            description: created.description,
+            completed: false,
+          },
+        });
         return json(created, 201);
       }
       return json({ error: "method not allowed" }, 405);
@@ -230,8 +272,18 @@ export default {
       const id = url.pathname.slice("/events/".length);
       if (!id) return json({ error: "missing id" }, 400);
       if (request.method === "DELETE") {
-        const ok = await deleteEvent(env, session.user.id, id);
-        return json({ ok }, ok ? 200 : 404);
+        const result = await deleteEvent(env, session.user.id, id);
+        if (result.deleted) {
+          await sendWebhook(env, {
+            op: "delete",
+            from: "cal",
+            user_email: session.user.email,
+            source_id: id,
+            target_id: result.dp_task_id,
+            updated_at: Date.now(),
+          });
+        }
+        return json({ ok: result.deleted }, result.deleted ? 200 : 404);
       }
       return json({ error: "method not allowed" }, 405);
     }

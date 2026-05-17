@@ -8,6 +8,7 @@ AI_GATEWAY_ACCOUNT_ID = "85d376fc54617bcb57185547f08e528b"
 AI_GATEWAY_NAME = "x"
 BETTER_AUTH_URL = "https://cal.fly.pm"
 BETTER_AUTH_TRUSTED_ORIGINS = "https://cal.fly.pm,https://cal.lazee.workers.dev"
+DP_WEBHOOK_URL = "https://alex.coffee/api/sync/webhook"
 
 [ai]
 binding = "AI"
@@ -16,6 +17,14 @@ binding = "AI"
 binding = "DB"
 database_name = "cal-db"
 database_id = "72c116f4-ba2c-4520-bafb-538e7ffe741e"
+
+[[d1_databases]]
+binding = "DP_DB"
+database_name = "daily-planner-db"
+database_id = "3afbe37d-947e-4f92-bbd9-db3be5065ea8"
+
+[triggers]
+crons = ["0 9 * * *"]
 
 [[r2_buckets]]
 binding = "CAL_ASSETS"
