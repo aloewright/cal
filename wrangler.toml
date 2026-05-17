@@ -1,10 +1,12 @@
 name = "cal"
 main = "src/index.ts"
 compatibility_date = "2026-05-17"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
 AI_GATEWAY_ACCOUNT_ID = "85d376fc54617bcb57185547f08e528b"
 AI_GATEWAY_NAME = "x"
+BETTER_AUTH_URL = "https://cal.lazee.workers.dev"
 
 [ai]
 binding = "AI"
