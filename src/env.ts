@@ -8,4 +8,5 @@ export interface Env {
   AI_GATEWAY_NAME: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
+  BETTER_AUTH_TRUSTED_ORIGINS?: string;
 }
