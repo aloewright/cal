@@ -6,6 +6,7 @@ export const createAuth = (env: Env) =>
     database: env.DB,
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
+    trustedOrigins: [env.BETTER_AUTH_URL],
     emailAndPassword: {
       enabled: true,
       autoSignIn: true,
