@@ -3,8 +3,8 @@ main = "src/index.ts"
 compatibility_date = "2026-05-17"
 
 [vars]
-AI_GATEWAY_ACCOUNT_ID = "replace-with-account-id"
-AI_GATEWAY_NAME = "replace-with-gateway-name"
+AI_GATEWAY_ACCOUNT_ID = "85d376fc54617bcb57185547f08e528b"
+AI_GATEWAY_NAME = "x"
 
 [ai]
 binding = "AI"
@@ -12,7 +12,7 @@ binding = "AI"
 [[d1_databases]]
 binding = "DB"
 database_name = "cal-db"
-database_id = "replace-with-d1-database-id"
+database_id = "72c116f4-ba2c-4520-bafb-538e7ffe741e"
 
 [[r2_buckets]]
 binding = "CAL_ASSETS"
@@ -20,7 +20,7 @@ bucket_name = "cal-assets"
 
 [[kv_namespaces]]
 binding = "CAL_CACHE"
-id = "replace-with-kv-namespace-id"
+id = "1e12c8646ed645d98af9c0b5357351fb"
 
 [[vectorize]]
 binding = "EMBEDDINGS_INDEX"
