@@ -17,7 +17,10 @@ const json = (body: unknown, status = 200): Response =>
 const html = (body: string, status = 200): Response =>
   new Response(body, {
     status,
-    headers: { "content-type": "text/html; charset=utf-8" },
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store, must-revalidate",
+    },
   });
 
 const aiGatewayUrl = (env: Env): string =>
