@@ -12,6 +12,9 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260517.1",
     "typescript": "^6.0.3",
