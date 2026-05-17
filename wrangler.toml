@@ -1,0 +1,27 @@
+name = "cal"
+main = "src/index.ts"
+compatibility_date = "2026-05-17"
+
+[vars]
+AI_GATEWAY_ACCOUNT_ID = "replace-with-account-id"
+AI_GATEWAY_NAME = "replace-with-gateway-name"
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cal-db"
+database_id = "replace-with-d1-database-id"
+
+[[r2_buckets]]
+binding = "CAL_ASSETS"
+bucket_name = "cal-assets"
+
+[[kv_namespaces]]
+binding = "CAL_CACHE"
+id = "replace-with-kv-namespace-id"
+
+[[vectorize]]
+binding = "EMBEDDINGS_INDEX"
+index_name = "cal-embeddings"
