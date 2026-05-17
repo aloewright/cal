@@ -17,8 +17,8 @@ Cloudflare deployment scaffold for running `cal.diy`-style workloads on Workers 
 ## Bootstrap local config templates
 
 ```bash
-cp /home/runner/work/cal/cal/wrangler.toml.example /home/runner/work/cal/cal/wrangler.toml
-cp /home/runner/work/cal/cal/.dev.vars.example /home/runner/work/cal/cal/.dev.vars
+cp wrangler.toml.example wrangler.toml
+cp .dev.vars.example .dev.vars
 ```
 
 `wrangler.toml.example` mirrors the Worker runtime bindings and vars used by the app.
