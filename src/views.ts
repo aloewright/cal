@@ -77,10 +77,11 @@ ${body}
 
 export const loginPage = (mode: "signin" | "signup" = "signin", error?: string): string => {
   const isSignup = mode === "signup";
+  const action = isSignup ? "/auth/sign-up" : "/auth/sign-in";
   return layout(
     isSignup ? "cal · sign up" : "cal · sign in",
     `<main>
-<form class="auth-card" id="auth-form" data-mode="${mode}">
+<form class="auth-card" method="post" action="${action}">
   <h2>${isSignup ? "Create your cal account" : "Sign in to cal"}</h2>
   ${
     isSignup
@@ -92,7 +93,7 @@ export const loginPage = (mode: "signin" | "signup" = "signin", error?: string):
   <label for="password">Password</label>
   <input id="password" name="password" type="password" autocomplete="${isSignup ? "new-password" : "current-password"}" required minlength="8" />
   <button type="submit">${isSignup ? "Sign up" : "Sign in"}</button>
-  <div class="err" id="err">${esc(error ?? "")}</div>
+  <div class="err">${esc(error ?? "")}</div>
   <div class="switch">
     ${
       isSignup
@@ -101,41 +102,6 @@ export const loginPage = (mode: "signin" | "signup" = "signin", error?: string):
     }
   </div>
 </form>
-<script>
-(() => {
-  const form = document.getElementById('auth-form');
-  const errEl = document.getElementById('err');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    errEl.textContent = '';
-    const mode = form.dataset.mode;
-    const fd = new FormData(form);
-    const body = {
-      email: fd.get('email'),
-      password: fd.get('password'),
-    };
-    if (mode === 'signup') body.name = fd.get('name');
-    const endpoint = mode === 'signup' ? '/api/auth/sign-up/email' : '/api/auth/sign-in/email';
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        let msg = 'Authentication failed';
-        try { const j = await res.json(); msg = j.message || j.error || msg; } catch {}
-        errEl.textContent = msg;
-        return;
-      }
-      window.location.href = '/';
-    } catch (err) {
-      errEl.textContent = 'Network error';
-    }
-  });
-})();
-</script>
 </main>`
   );
 };

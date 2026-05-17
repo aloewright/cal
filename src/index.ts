@@ -81,6 +81,46 @@ export default {
       return auth.handler(request);
     }
 
+    if (
+      (url.pathname === "/auth/sign-in" || url.pathname === "/auth/sign-up") &&
+      request.method === "POST"
+    ) {
+      const form = await request.formData().catch(() => null);
+      if (!form) {
+        return html(loginPage("signin", "Invalid form submission"), 400);
+      }
+      const email = String(form.get("email") ?? "").trim();
+      const password = String(form.get("password") ?? "");
+      const name = String(form.get("name") ?? "").trim();
+      const isSignup = url.pathname === "/auth/sign-up";
+
+      const body: Record<string, string> = { email, password };
+      if (isSignup) body.name = name || email.split("@")[0];
+
+      const targetPath = isSignup ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email";
+      const innerReq = new Request(new URL(targetPath, url).toString(), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const innerRes = await auth.handler(innerReq);
+      if (innerRes.ok) {
+        const headers = new Headers();
+        headers.set("location", "/");
+        const setCookie = innerRes.headers.get("set-cookie");
+        if (setCookie) headers.append("set-cookie", setCookie);
+        return new Response(null, { status: 303, headers });
+      }
+      let msg = "Authentication failed";
+      try {
+        const j = (await innerRes.json()) as { message?: string; error?: string };
+        msg = j.message || j.error || msg;
+      } catch {
+        // ignore
+      }
+      return html(loginPage(isSignup ? "signup" : "signin", msg), innerRes.status);
+    }
+
     if (url.pathname === "/health") {
       return json({ ok: true });
     }
