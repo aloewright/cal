@@ -1,0 +1,16 @@
+name: TanStack Compromise Checker
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: TanStack Compromise Checker
+        uses: fabriziosalmi/tanstack-compromise-checker@v1.1.1
