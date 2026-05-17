@@ -14,6 +14,16 @@ Cloudflare deployment scaffold for running `cal.diy`-style workloads on Workers 
 - A Cloudflare account
 - `npm install`
 
+## Bootstrap local config templates
+
+```bash
+cp /home/runner/work/cal/cal/wrangler.toml.example /home/runner/work/cal/cal/wrangler.toml
+cp /home/runner/work/cal/cal/.dev.vars.example /home/runner/work/cal/cal/.dev.vars
+```
+
+`wrangler.toml.example` mirrors the Worker runtime bindings and vars used by the app.
+Keep it in sync with `src/index.ts` when the runtime surface changes.
+
 ## Create Cloudflare resources
 
 Run these once, then copy returned IDs into `/home/runner/work/cal/cal/wrangler.toml`.
@@ -31,6 +41,7 @@ Create an AI Gateway in the Cloudflare dashboard, then set:
 - `AI_GATEWAY_NAME`
 
 in `[vars]` inside `wrangler.toml`.
+You can also set these in `.dev.vars` for local-only values.
 
 ## Local dev and deploy
 
