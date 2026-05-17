@@ -39,6 +39,8 @@ npm run dev
 npm run deploy
 ```
 
+This project deploys to the custom domain `cal.fly.pm` via Wrangler route configuration.
+
 ## Health endpoints
 
 - `GET /health` → basic health check
