@@ -54,7 +54,7 @@ describe("monthView", () => {
     expect(html).toContain("Review launch list");
   });
 
-  it("renders the calendar navbar with only the logo as the brand", () => {
+  it("renders an icon-only sign-out link without the calendar navbar", () => {
     const html = monthView({
       userEmail: "aloe@example.com",
       year: 2026,
@@ -63,11 +63,19 @@ describe("monthView", () => {
       today: { y: 2026, m: 5, d: 22 },
     });
 
-    expect(html).toContain('<img class="brand-mark" src="/logo.png" alt="" width="34" height="34" />');
-    expect(html).not.toContain("<h1>cal</h1>");
+    expect(html).toContain("<title>Calendar</title>");
+    expect(html).toContain('<a href="#" id="signout" class="signout-link" aria-label="Sign out" title="Sign out">');
+    expect(html).toContain('<svg viewBox="0 0 24 24" aria-hidden="true">');
+    expect(html).toContain(".signout-link { position: fixed; z-index: 30; top: 14px; right: 14px;");
+    expect(html).toContain("opacity: 0.42; cursor: default;");
+    expect(html).toContain(".signout-link:hover, .signout-link:focus-visible { opacity: 0.9; cursor: pointer;");
+    expect(html).not.toContain("<header>");
+    expect(html).not.toContain("<nav>");
+    expect(html).not.toContain("brand-mark");
+    expect(html).not.toContain("aloe@example.com");
   });
 
-  it("escapes event and account content in the calendar surface", () => {
+  it("escapes event content in the calendar surface", () => {
     const html = monthView({
       userEmail: 'user"><img src=x onerror=alert(1)>@example.com',
       year: 2026,
@@ -83,7 +91,7 @@ describe("monthView", () => {
 
     expect(html).toContain("&lt;img src=x onerror=alert(&quot;event&quot;)&gt;");
     expect(html).toContain("Use &lt;strong&gt;escaped&lt;/strong&gt; notes");
-    expect(html).toContain("&quot;&gt;&lt;img src=x onerror=alert(1)&gt;@example.com");
+    expect(html).not.toContain('user"><img src=x onerror=alert(1)>@example.com');
     expect(html).not.toContain("<strong>escaped</strong>");
   });
 

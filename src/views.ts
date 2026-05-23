@@ -70,12 +70,10 @@ const layout = (title: string, body: string): string => `<!doctype html>
   body { background: var(--background); color: var(--foreground); font: 15px/1.45 var(--font-sans); letter-spacing: 0; -webkit-font-smoothing: antialiased; }
   a { color: inherit; text-decoration: none; }
   a:hover { text-decoration: none; }
-  header { display: flex; align-items: center; gap: 1rem; margin: 20px auto 0; width: min(1180px, calc(100% - 32px)); padding: 0.55rem 0.65rem; border: 1px solid var(--sidebar-border); border-radius: 999px; background: var(--sidebar); box-shadow: var(--shadow-sm); }
-  header .brand { display: inline-flex; align-items: center; gap: 0.65rem; padding-right: 0.1rem; }
-  header .brand-mark { width: 34px; height: 34px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.18); }
-  header nav { margin-left: auto; display: flex; gap: 0.75rem; align-items: center; color: var(--muted-foreground); font-size: 0.88rem; }
-  header nav a { color: var(--foreground); border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 999px; padding: 0.45rem 0.8rem; background: color-mix(in srgb, var(--card) 72%, transparent); transition: background-color 160ms ease, border-color 160ms ease, transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
-  header nav a:hover { background: var(--accent); border-color: var(--border); transform: translateY(-1px); }
+  .signout-link { position: fixed; z-index: 30; top: 14px; right: 14px; display: inline-grid; place-items: center; width: 34px; height: 34px; color: var(--foreground); opacity: 0.42; cursor: default; transition: opacity 160ms ease, transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .signout-link:hover, .signout-link:focus-visible { opacity: 0.9; cursor: pointer; transform: translateY(-1px); }
+  .signout-link:focus-visible { outline: 2px solid color-mix(in srgb, var(--foreground) 45%, transparent); outline-offset: 3px; border-radius: 999px; }
+  .signout-link svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
   main { max-width: 1180px; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
   main.auth-shell { max-width: none; width: 100%; }
   .auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; overflow-x: hidden; }
@@ -131,8 +129,6 @@ const layout = (title: string, body: string): string => `<!doctype html>
   .day-events .row .meta { flex: 1; font-size: 0.85rem; }
   .day-events .row button { font-size: 0.75rem; padding: 0.2rem 0.5rem; }
   @media (max-width: 760px) {
-    header { margin-top: 12px; width: min(100% - 20px, 1180px); }
-    header nav span { display: none; }
     main { padding: 1rem 0.6rem 1.5rem; }
     .auth-shell { justify-items: start; padding: 16px; }
     .auth-card { width: min(358px, calc(100vw - 32px)); }
@@ -251,15 +247,13 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
     .map((l) => `<div class="dow">${l}</div>`)
     .join("");
 
-  const body = `<header>
-  <div class="brand">
-    <img class="brand-mark" src="/logo.png" alt="" width="34" height="34" />
-  </div>
-  <nav>
-    <span>${esc(userEmail)}</span>
-    <a href="#" id="signout">Sign out</a>
-  </nav>
-</header>
+  const body = `<a href="#" id="signout" class="signout-link" aria-label="Sign out" title="Sign out">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+    <path d="M16 17l5-5-5-5"></path>
+    <path d="M21 12H9"></path>
+  </svg>
+</a>
 <main>
   <div class="toolbar">
     <a class="btn" href="/?ym=${prev.y}-${String(prev.m).padStart(2, "0")}">‹ Prev</a>
@@ -377,7 +371,7 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
 })();
 </script>`;
 
-  return layout(`cal · ${monthLabel(year, month)}`, body);
+  return layout("Calendar", body);
 };
 
 const renderCell = (
