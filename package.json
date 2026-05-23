@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "test": "npm run test:unit && npm run test:interaction && npm run test:e2e",
+    "test:unit": "vitest run tests/unit",
+    "test:interaction": "vitest run tests/interaction",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "types": "wrangler types"
   },
@@ -14,7 +18,10 @@
   "license": "MIT",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260517.1",
+    "@playwright/test": "^1.60.0",
+    "happy-dom": "^20.9.0",
     "typescript": "^6.0.3",
+    "vitest": "^4.1.7",
     "wrangler": "^4.92.0"
   },
   "dependencies": {
