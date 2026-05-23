@@ -368,8 +368,13 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
 
   document.getElementById('signout').addEventListener('click', async (e) => {
     e.preventDefault();
-    await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'include' });
-    window.location.href = '/';
+    const res = await fetch('/api/auth/sign-out', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+      credentials: 'include',
+    });
+    if (res.ok) window.location.href = '/';
   });
 })();
 </script>`;
