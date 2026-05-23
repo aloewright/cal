@@ -54,6 +54,19 @@ describe("monthView", () => {
     expect(html).toContain("Review launch list");
   });
 
+  it("renders the calendar navbar with only the logo as the brand", () => {
+    const html = monthView({
+      userEmail: "aloe@example.com",
+      year: 2026,
+      month: 5,
+      events: [event()],
+      today: { y: 2026, m: 5, d: 22 },
+    });
+
+    expect(html).toContain('<img class="brand-mark" src="/logo.png" alt="" width="34" height="34" />');
+    expect(html).not.toContain("<h1>cal</h1>");
+  });
+
   it("escapes event and account content in the calendar surface", () => {
     const html = monthView({
       userEmail: 'user"><img src=x onerror=alert(1)>@example.com',

@@ -71,8 +71,7 @@ const layout = (title: string, body: string): string => `<!doctype html>
   a { color: inherit; text-decoration: none; }
   a:hover { text-decoration: none; }
   header { display: flex; align-items: center; gap: 1rem; margin: 20px auto 0; width: min(1180px, calc(100% - 32px)); padding: 0.55rem 0.65rem; border: 1px solid var(--sidebar-border); border-radius: 999px; background: var(--sidebar); box-shadow: var(--shadow-sm); }
-  header h1 { margin: 0; font-family: var(--font-serif); font-size: 1.05rem; line-height: 1; font-weight: 700; letter-spacing: 0; }
-  header .brand { display: inline-flex; align-items: center; gap: 0.65rem; padding-right: 0.4rem; }
+  header .brand { display: inline-flex; align-items: center; gap: 0.65rem; padding-right: 0.1rem; }
   header .brand-mark { width: 34px; height: 34px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.18); }
   header nav { margin-left: auto; display: flex; gap: 0.75rem; align-items: center; color: var(--muted-foreground); font-size: 0.88rem; }
   header nav a { color: var(--foreground); border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 999px; padding: 0.45rem 0.8rem; background: color-mix(in srgb, var(--card) 72%, transparent); transition: background-color 160ms ease, border-color 160ms ease, transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
@@ -255,7 +254,6 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
   const body = `<header>
   <div class="brand">
     <img class="brand-mark" src="/logo.png" alt="" width="34" height="34" />
-    <h1>cal</h1>
   </div>
   <nav>
     <span>${esc(userEmail)}</span>
