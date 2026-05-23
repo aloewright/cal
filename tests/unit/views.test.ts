@@ -89,4 +89,17 @@ describe("monthView", () => {
     expect(html).toContain("body: '{}'");
     expect(html).toContain("credentials: 'include'");
   });
+
+  it("lifts the hovered day cell above neighboring cards for tooltips", () => {
+    const html = monthView({
+      userEmail: "aloe@example.com",
+      year: 2026,
+      month: 5,
+      events: [event()],
+      today: { y: 2026, m: 5, d: 22 },
+    });
+
+    expect(html).toContain(".cell:hover, .cell:focus-within { z-index: 20;");
+    expect(html).toContain(".cell .tooltip { display: none; position: absolute; z-index: 10;");
+  });
 });

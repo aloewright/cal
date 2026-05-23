@@ -102,7 +102,7 @@ const layout = (title: string, body: string): string => `<!doctype html>
   .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
   .dow { padding: 0.35rem; color: var(--muted-foreground); font-size: 0.73rem; font-weight: 800; text-transform: uppercase; text-align: center; }
   .cell { background: var(--card); min-height: 102px; padding: 0.55rem; position: relative; cursor: pointer; border: 1px solid color-mix(in srgb, var(--border) 35%, transparent); border-radius: var(--radius); box-shadow: var(--shadow-sm); transition: background-color 140ms ease-out, border-color 160ms ease-out, box-shadow 200ms ease-out, transform 180ms cubic-bezier(0.4, 0, 0.2, 1), opacity 400ms ease-out; }
-  .cell:hover { border-color: color-mix(in srgb, var(--border) 70%, transparent); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.16); }
+  .cell:hover, .cell:focus-within { z-index: 20; border-color: color-mix(in srgb, var(--border) 70%, transparent); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.16); }
   .cell.muted { opacity: 0.48; }
   .cell.today { border-color: color-mix(in srgb, var(--primary) 34%, var(--border)); }
   .cell.today .daynum { background: var(--primary); color: var(--primary-foreground); }
