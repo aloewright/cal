@@ -25,6 +25,79 @@ const html = (body: string, status = 200): Response =>
     },
   });
 
+
+const MAIL_STATIC_ORIGIN = "https://mail.fly.pm";
+
+const staticAssetTypes = new Map<string, string>([
+  ["/favicon.ico", "image/vnd.microsoft.icon"],
+  ["/favicon-16x16.png", "image/png"],
+  ["/favicon-32x32.png", "image/png"],
+  ["/apple-touch-icon.png", "image/png"],
+  ["/icon-192.png", "image/png"],
+  ["/icon-512.png", "image/png"],
+]);
+
+const calendarStaticAssetPaths = new Map<string, string>([
+  ["/favicon.ico", "/calendar-favicon.ico"],
+  ["/favicon-16x16.png", "/calendar-favicon-16x16.png"],
+  ["/favicon-32x32.png", "/calendar-favicon-32x32.png"],
+  ["/apple-touch-icon.png", "/calendar-apple-touch-icon.png"],
+  ["/icon-192.png", "/calendar-icon-192.png"],
+  ["/icon-512.png", "/calendar-icon-512.png"],
+]);
+
+const siteManifest = {
+  name: "fly.pm Calendar",
+  short_name: "fly.pm",
+  icons: [
+    {
+      src: "/icon-192.png",
+      sizes: "192x192",
+      type: "image/png",
+      purpose: "any maskable",
+    },
+    {
+      src: "/icon-512.png",
+      sizes: "512x512",
+      type: "image/png",
+      purpose: "any maskable",
+    },
+  ],
+  theme_color: "#0f172a",
+  background_color: "#0f172a",
+  display: "standalone",
+  start_url: "/",
+  scope: "/",
+  orientation: "portrait-primary",
+};
+
+async function staticAssetResponse(url: URL): Promise<Response | null> {
+  if (url.pathname === "/site.webmanifest") {
+    return new Response(JSON.stringify(siteManifest, null, 2), {
+      headers: {
+        "content-type": "application/manifest+json; charset=utf-8",
+        "cache-control": "public, max-age=3600",
+      },
+    });
+  }
+
+  const contentType = staticAssetTypes.get(url.pathname);
+  if (!contentType) return null;
+
+  const assetPath = calendarStaticAssetPaths.get(url.pathname) ?? url.pathname;
+  const res = await fetch(`${MAIL_STATIC_ORIGIN}${assetPath}`);
+  if (!res.ok || !res.body) {
+    return new Response("Not found", { status: 404 });
+  }
+  return new Response(res.body, {
+    status: 200,
+    headers: {
+      "content-type": contentType,
+      "cache-control": "public, max-age=86400",
+    },
+  });
+}
+
 const aiGatewayUrl = (env: Env): string =>
   `https://gateway.ai.cloudflare.com/v1/${env.AI_GATEWAY_ACCOUNT_ID}/${env.AI_GATEWAY_NAME}/openai`;
 
@@ -93,6 +166,8 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const auth = createAuth(env);
+    const staticResponse = await staticAssetResponse(url);
+    if (staticResponse) return staticResponse;
 
     if (url.pathname.startsWith("/api/auth/")) {
       return auth.handler(request);
