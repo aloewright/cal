@@ -15,59 +15,136 @@ const layout = (title: string, body: string): string => `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="theme-color" content="#5a5a61" />
+<link rel="icon" href="/favicon.ico" sizes="any" />
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="manifest" href="/site.webmanifest" />
 <title>${esc(title)}</title>
 <style>
-  :root { color-scheme: light dark; --accent: #4f46e5; --border: rgba(127,127,127,0.25); }
+  @import url('https://fonts.googleapis.com/css2?family=Aleo:wght@600;700&family=JetBrains+Mono:wght@500;600&family=Nunito:wght@400;500;600;700;800&display=swap');
+  :root {
+    color-scheme: light dark;
+    --background: oklch(0.9764 0.0013 286.3755);
+    --foreground: oklch(0.3538 0.0068 286.0445);
+    --card: oklch(1 0 0);
+    --muted: oklch(0.961 0.0029 264.5419);
+    --muted-foreground: oklch(0.5399 0.0077 286.1392);
+    --accent: oklch(0.9482 0.0034 247.8593);
+    --accent-foreground: oklch(0.3538 0.0068 286.0445);
+    --primary: oklch(0.3538 0.0068 286.0445);
+    --primary-foreground: oklch(0.9764 0.0013 286.3755);
+    --border: oklch(0.9137 0.004 286.3196);
+    --input: oklch(0.9137 0.004 286.3196);
+    --sidebar: oklch(0.961 0.0029 264.5419);
+    --sidebar-border: oklch(0.9137 0.004 286.3196);
+    --font-sans: Nunito, ui-sans-serif, sans-serif, system-ui;
+    --font-serif: Aleo, ui-serif, serif;
+    --font-mono: JetBrains Mono, ui-monospace, monospace;
+    --radius: 0.5rem;
+    --shadow-sm: 0px 4px 10px 0px hsl(0 0% 0% / 0.05), 0px 1px 2px -1px hsl(0 0% 0% / 0.05);
+    --shadow-lg: 0px 4px 10px 0px hsl(0 0% 0% / 0.05), 0px 4px 6px -1px hsl(0 0% 0% / 0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: oklch(0.3538 0.0068 286.0445);
+      --foreground: oklch(0.98 0.016 73.684);
+      --card: oklch(0.4106 0.0066 286.1057);
+      --muted: oklch(0.4106 0.0066 286.1057);
+      --muted-foreground: oklch(0.7587 0.0071 286.2303);
+      --accent: oklch(0.4697 0.0096 286.0254);
+      --accent-foreground: oklch(0.901 0.076 70.697);
+      --primary: oklch(0.9152 0.0046 258.3255);
+      --primary-foreground: oklch(0.3538 0.0068 286.0445);
+      --border: oklch(0.4331 0.0081 286.055);
+      --input: oklch(0.4331 0.0081 286.055);
+      --sidebar: oklch(0.3147 0.0071 285.9873);
+      --sidebar-border: oklch(0.4331 0.0081 286.055);
+      --shadow-sm: 0px 8px 15px 0px hsl(0 0% 0% / 0.3), 0px 1px 2px -1px hsl(0 0% 0% / 0.3);
+      --shadow-lg: 0px 8px 15px 0px hsl(0 0% 0% / 0.3), 0px 4px 6px -1px hsl(0 0% 0% / 0.3);
+    }
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  header { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); }
-  header h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
-  header nav { margin-left: auto; display: flex; gap: 1rem; align-items: center; }
-  main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
-  .auth-card { max-width: 360px; margin: 4rem auto; padding: 2rem; border: 1px solid var(--border); border-radius: 12px; }
-  .auth-card h2 { margin-top: 0; }
-  .auth-card label { display: block; margin: 0.75rem 0 0.25rem; font-size: 0.85rem; opacity: 0.8; }
-  .auth-card input { width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: inherit; font: inherit; }
-  .auth-card button { margin-top: 1rem; width: 100%; padding: 0.65rem; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
-  .auth-card .switch { margin-top: 1rem; font-size: 0.85rem; text-align: center; opacity: 0.8; }
-  .auth-card .err { color: #d33; font-size: 0.85rem; margin-top: 0.75rem; min-height: 1em; }
+  html, body { margin: 0; min-height: 100%; }
+  body { background: var(--background); color: var(--foreground); font: 15px/1.45 var(--font-sans); letter-spacing: 0; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  a:hover { text-decoration: none; }
+  header { display: flex; align-items: center; gap: 1rem; margin: 20px auto 0; width: min(1180px, calc(100% - 32px)); padding: 0.55rem 0.65rem; border: 1px solid var(--sidebar-border); border-radius: 999px; background: var(--sidebar); box-shadow: var(--shadow-sm); }
+  header h1 { margin: 0; font-family: var(--font-serif); font-size: 1.05rem; line-height: 1; font-weight: 700; letter-spacing: 0; }
+  header .brand { display: inline-flex; align-items: center; gap: 0.65rem; padding-right: 0.4rem; }
+  header .brand-mark { width: 34px; height: 34px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.18); }
+  header nav { margin-left: auto; display: flex; gap: 0.75rem; align-items: center; color: var(--muted-foreground); font-size: 0.88rem; }
+  header nav a { color: var(--foreground); border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 999px; padding: 0.45rem 0.8rem; background: color-mix(in srgb, var(--card) 72%, transparent); transition: background-color 160ms ease, border-color 160ms ease, transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+  header nav a:hover { background: var(--accent); border-color: var(--border); transform: translateY(-1px); }
+  main { max-width: 1180px; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
+  main.auth-shell { max-width: none; width: 100%; }
+  .auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; overflow-x: hidden; }
+  .auth-card { width: min(390px, calc(100vw - 32px)); max-width: calc(100vw - 32px); min-width: 0; padding: 1.35rem; border: 1px solid color-mix(in srgb, var(--border) 88%, transparent); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow-lg); }
+  .auth-card .auth-brand { display: flex; align-items: center; gap: 0.75rem; min-width: 0; margin-bottom: 1rem; }
+  .auth-card .auth-brand img { width: 42px; height: 42px; border-radius: 12px; box-shadow: var(--shadow-sm); }
+  .auth-card h2 { min-width: 0; margin: 0; font-family: var(--font-serif); font-size: 1.35rem; line-height: 1.15; overflow-wrap: anywhere; }
+  .auth-card label { display: block; margin: 0.8rem 0 0.3rem; color: var(--muted-foreground); font-size: 0.82rem; font-weight: 700; }
+  .auth-card input { width: 100%; padding: 0.68rem 0.75rem; border: 1px solid var(--input); border-radius: var(--radius); background: var(--background); color: inherit; font: inherit; outline: none; transition: border-color 160ms ease, box-shadow 160ms ease; }
+  .auth-card input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent); }
+  .auth-card button { margin-top: 1rem; width: 100%; padding: 0.72rem; border: 1px solid var(--primary); border-radius: var(--radius); background: var(--primary); color: var(--primary-foreground); font: inherit; font-weight: 800; cursor: pointer; transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 160ms ease; }
+  .auth-card button:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+  .auth-card .switch { margin-top: 1rem; color: var(--muted-foreground); font-size: 0.87rem; text-align: center; }
+  .auth-card .switch a { color: var(--foreground); font-weight: 800; }
+  .auth-card .err { color: var(--destructive, #d33); font-size: 0.85rem; margin-top: 0.75rem; min-height: 1em; }
 
-  .toolbar { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
-  .toolbar h2 { margin: 0; font-size: 1.25rem; }
+  .toolbar { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 0.85rem; }
+  .toolbar h2 { margin: 0 0.35rem; font-family: var(--font-serif); font-size: clamp(1.3rem, 2vw, 1.75rem); line-height: 1.1; }
   .toolbar .spacer { flex: 1; }
-  .toolbar a.btn, .toolbar button { padding: 0.4rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  .toolbar a.btn, .toolbar button { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0.45rem 0.75rem; border: 1px solid color-mix(in srgb, var(--border) 84%, transparent); border-radius: 999px; background: var(--card); color: inherit; font: inherit; font-weight: 700; cursor: pointer; box-shadow: var(--shadow-sm); transition: background-color 160ms ease, transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .toolbar a.btn:hover, .toolbar button:hover { background: var(--accent); transform: translateY(-1px); }
 
-  .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .dow { background: var(--border); padding: 0.5rem; font-size: 0.75rem; text-transform: uppercase; opacity: 0.7; text-align: center; }
-  .cell { background: Canvas; min-height: 92px; padding: 0.4rem 0.5rem; position: relative; cursor: pointer; }
-  .cell.muted { opacity: 0.4; }
-  .cell.today .daynum { background: var(--accent); color: #fff; }
-  .daynum { display: inline-block; min-width: 1.75em; height: 1.75em; line-height: 1.75em; text-align: center; border-radius: 50%; font-size: 0.85rem; }
-  .events { margin-top: 0.25rem; display: flex; flex-direction: column; gap: 2px; }
-  .pill { background: var(--accent); color: #fff; border-radius: 3px; padding: 1px 5px; font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cell .tooltip { display: none; position: absolute; z-index: 10; top: 100%; left: 0.5rem; min-width: 200px; max-width: 280px; background: Canvas; border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.6rem; box-shadow: 0 6px 24px rgba(0,0,0,0.15); font-size: 0.85rem; }
+  .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+  .dow { padding: 0.35rem; color: var(--muted-foreground); font-size: 0.73rem; font-weight: 800; text-transform: uppercase; text-align: center; }
+  .cell { background: var(--card); min-height: 102px; padding: 0.55rem; position: relative; cursor: pointer; border: 1px solid color-mix(in srgb, var(--border) 35%, transparent); border-radius: var(--radius); box-shadow: var(--shadow-sm); transition: background-color 140ms ease-out, border-color 160ms ease-out, box-shadow 200ms ease-out, transform 180ms cubic-bezier(0.4, 0, 0.2, 1), opacity 400ms ease-out; }
+  .cell:hover { border-color: color-mix(in srgb, var(--border) 70%, transparent); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.16); }
+  .cell.muted { opacity: 0.48; }
+  .cell.today { border-color: color-mix(in srgb, var(--primary) 34%, var(--border)); }
+  .cell.today .daynum { background: var(--primary); color: var(--primary-foreground); }
+  .daynum { display: inline-grid; place-items: center; min-width: 1.85em; height: 1.85em; border-radius: 999px; font-size: 0.82rem; font-weight: 800; }
+  .events { margin-top: 0.35rem; display: flex; flex-direction: column; gap: 4px; }
+  .pill { background: var(--accent); color: var(--accent-foreground); border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: calc(var(--radius) - 2px); padding: 2px 6px; font-size: 0.72rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cell .tooltip { display: none; position: absolute; z-index: 10; top: calc(100% + 6px); left: 0.5rem; min-width: 210px; max-width: 290px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.55rem 0.65rem; box-shadow: var(--shadow-lg); font-size: 0.85rem; }
   .cell:hover .tooltip { display: block; }
   .tooltip .ev { padding: 3px 0; border-bottom: 1px dashed var(--border); }
   .tooltip .ev:last-child { border-bottom: 0; }
-  .tooltip .ev-title { font-weight: 600; }
-  .tooltip .ev-meta { opacity: 0.7; font-size: 0.78rem; }
-  .tooltip .empty { opacity: 0.6; font-style: italic; }
+  .tooltip .ev-title { font-weight: 800; }
+  .tooltip .ev-meta { color: var(--muted-foreground); font-size: 0.78rem; }
+  .tooltip .empty { color: var(--muted-foreground); font-style: italic; }
 
-  dialog { border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; max-width: 380px; width: 90%; background: Canvas; color: inherit; }
+  dialog { border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; max-width: 390px; width: 90%; background: var(--card); color: inherit; box-shadow: var(--shadow-lg); }
   dialog::backdrop { background: rgba(0,0,0,0.4); }
-  dialog h3 { margin: 0 0 0.75rem; }
-  dialog label { display: block; margin: 0.5rem 0 0.2rem; font-size: 0.8rem; opacity: 0.8; }
-  dialog input, dialog textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: inherit; font: inherit; }
+  dialog h3 { margin: 0 0 0.75rem; font-family: var(--font-serif); }
+  dialog label { display: block; margin: 0.55rem 0 0.2rem; color: var(--muted-foreground); font-size: 0.8rem; font-weight: 800; }
+  dialog input, dialog textarea { width: 100%; padding: 0.58rem 0.65rem; border: 1px solid var(--input); border-radius: var(--radius); background: var(--background); color: inherit; font: inherit; outline: none; }
+  dialog input:focus, dialog textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent); }
   dialog .actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
-  dialog button { padding: 0.45rem 0.85rem; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-  dialog button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  dialog button { padding: 0.48rem 0.85rem; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: inherit; font: inherit; font-weight: 800; cursor: pointer; }
+  dialog button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
   .day-events { margin-top: 0.5rem; max-height: 180px; overflow-y: auto; }
   .day-events .row { display: flex; gap: 0.5rem; align-items: center; padding: 4px 0; border-bottom: 1px dashed var(--border); }
   .day-events .row:last-child { border-bottom: 0; }
   .day-events .row .meta { flex: 1; font-size: 0.85rem; }
   .day-events .row button { font-size: 0.75rem; padding: 0.2rem 0.5rem; }
+  @media (max-width: 760px) {
+    header { margin-top: 12px; width: min(100% - 20px, 1180px); }
+    header nav span { display: none; }
+    main { padding: 1rem 0.6rem 1.5rem; }
+    .auth-shell { justify-items: start; padding: 16px; }
+    .auth-card { width: min(358px, calc(100vw - 32px)); }
+    .toolbar { flex-wrap: wrap; }
+    .toolbar h2 { order: -1; width: 100%; margin: 0 0 0.35rem; }
+    .grid { gap: 4px; }
+    .cell { min-height: 76px; padding: 0.35rem; }
+    .pill { display: none; }
+    .cell .tooltip { display: none; }
+    .dow { font-size: 0.66rem; }
+  }
 </style>
 </head>
 <body>
@@ -80,9 +157,12 @@ export const loginPage = (mode: "signin" | "signup" = "signin", error?: string):
   const action = isSignup ? "/auth/sign-up" : "/auth/sign-in";
   return layout(
     isSignup ? "cal · sign up" : "cal · sign in",
-    `<main>
+    `<main class="auth-shell">
 <form class="auth-card" method="post" action="${action}">
-  <h2>${isSignup ? "Create your cal account" : "Sign in to cal"}</h2>
+  <div class="auth-brand">
+    <img src="/logo.png" alt="" width="42" height="42" />
+    <h2>${isSignup ? "Create your cal account" : "Sign in to cal"}</h2>
+  </div>
   ${
     isSignup
       ? `<label for="name">Name</label><input id="name" name="name" autocomplete="name" required />`
@@ -173,7 +253,10 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
     .join("");
 
   const body = `<header>
-  <h1>cal</h1>
+  <div class="brand">
+    <img class="brand-mark" src="/logo.png" alt="" width="34" height="34" />
+    <h1>cal</h1>
+  </div>
   <nav>
     <span>${esc(userEmail)}</span>
     <a href="#" id="signout">Sign out</a>

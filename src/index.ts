@@ -33,6 +33,7 @@ const staticAssetTypes = new Map<string, string>([
   ["/favicon-16x16.png", "image/png"],
   ["/favicon-32x32.png", "image/png"],
   ["/apple-touch-icon.png", "image/png"],
+  ["/logo.png", "image/png"],
   ["/icon-192.png", "image/png"],
   ["/icon-512.png", "image/png"],
 ]);
@@ -42,6 +43,7 @@ const calendarStaticAssetPaths = new Map<string, string>([
   ["/favicon-16x16.png", "/calendar-favicon-16x16.png"],
   ["/favicon-32x32.png", "/calendar-favicon-32x32.png"],
   ["/apple-touch-icon.png", "/calendar-apple-touch-icon.png"],
+  ["/logo.png", "/calendar-appicon.png"],
   ["/icon-192.png", "/calendar-icon-192.png"],
   ["/icon-512.png", "/calendar-icon-512.png"],
 ]);
