@@ -1,3 +1,4 @@
+import { splitSetCookieHeader } from "better-auth/cookies";
 import { createAuth } from "./auth";
 import type { Env } from "./env";
 import {
@@ -25,6 +26,19 @@ const html = (body: string, status = 200): Response =>
     },
   });
 
+
+const appendSetCookieHeaders = (target: Headers, source: Headers): void => {
+  const getSetCookie = source.getSetCookie?.();
+  const setCookie = source.get("set-cookie");
+  const cookies = getSetCookie?.length
+    ? getSetCookie
+    : setCookie
+      ? splitSetCookieHeader(setCookie)
+      : [];
+  for (const cookie of cookies) {
+    target.append("set-cookie", cookie);
+  }
+};
 
 const MAIL_STATIC_ORIGIN = "https://mail.fly.pm";
 
@@ -201,8 +215,7 @@ export default {
       if (innerRes.ok) {
         const headers = new Headers();
         headers.set("location", "/");
-        const setCookie = innerRes.headers.get("set-cookie");
-        if (setCookie) headers.append("set-cookie", setCookie);
+        appendSetCookieHeaders(headers, innerRes.headers);
         return new Response(null, { status: 303, headers });
       }
       let msg = "Authentication failed";
