@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from "vitest";
 import { loginPage, monthView } from "../../src/views";
 import type { CalEvent } from "../../src/events";
@@ -70,5 +72,21 @@ describe("monthView", () => {
     expect(html).toContain("Use &lt;strong&gt;escaped&lt;/strong&gt; notes");
     expect(html).toContain("&quot;&gt;&lt;img src=x onerror=alert(1)&gt;@example.com");
     expect(html).not.toContain("<strong>escaped</strong>");
+  });
+
+  it("renders sign-out as the JSON POST Better Auth expects", () => {
+    const html = monthView({
+      userEmail: "aloe@example.com",
+      year: 2026,
+      month: 5,
+      events: [event()],
+      today: { y: 2026, m: 5, d: 22 },
+    });
+
+    expect(html).toContain("await fetch('/api/auth/sign-out', {");
+    expect(html).toContain("method: 'POST'");
+    expect(html).toContain("headers: { 'content-type': 'application/json' }");
+    expect(html).toContain("body: '{}'");
+    expect(html).toContain("credentials: 'include'");
   });
 });
