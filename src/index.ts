@@ -1,5 +1,5 @@
 import { splitSetCookieHeader } from "better-auth/cookies";
-import { createAuth } from "./auth";
+import { createAuth, getCurrentSession } from "./auth";
 import type { Env } from "./env";
 import {
   createEvent,
@@ -21,7 +21,15 @@ import {
 } from "./realtimekit";
 import { reconcile } from "./reconcile";
 import { handleSyncWebhook, sendWebhook } from "./sync";
-import { loginPage, meetingPage, monthView } from "./views";
+import {
+  archiveSharedTask,
+  createSharedTask,
+  isValidTaskDate,
+  isValidTaskTime,
+  listSharedTasks,
+  toggleSharedTask,
+} from "./tasks";
+import { loginPage, meetingPage, monthView, tasksView } from "./views";
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -170,6 +178,18 @@ const appendSetCookieHeaders = (target: Headers, source: Headers): void => {
 };
 
 const MAIL_STATIC_ORIGIN = "https://mail.fly.pm";
+
+const mailAppUrl = (env: Env, path: string): string =>
+  new URL(path, env.MAIL_APP_URL ?? MAIL_STATIC_ORIGIN).toString();
+
+async function readAuthError(res: Response): Promise<string> {
+  try {
+    const j = (await res.json()) as { message?: string; error?: string; code?: string };
+    return j.message || j.error || j.code || "Authentication failed";
+  } catch {
+    return "Authentication failed";
+  }
+}
 
 const staticAssetTypes = new Map<string, string>([
   ["/favicon.ico", "image/vnd.microsoft.icon"],
@@ -330,6 +350,30 @@ export default {
 
     const auth = createAuth(env);
 
+    if (url.pathname === "/api/auth/sign-out" && request.method === "POST") {
+      const session = await getCurrentSession(env, request, auth);
+      const headers = new Headers();
+
+      if (session?.source === "mail" && session.authCookie) {
+        try {
+          const mailRes = await fetch(mailAppUrl(env, "/api/auth/sign-out"), {
+            method: "POST",
+            headers: {
+              accept: "application/json",
+              cookie: `${session.authCookie.name}=${session.authCookie.value}`,
+            },
+          });
+          appendSetCookieHeaders(headers, mailRes.headers);
+        } catch (err) {
+          console.warn("[auth] mail sign-out failed", err);
+        }
+      }
+
+      const localRes = await auth.handler(request);
+      appendSetCookieHeaders(headers, localRes.headers);
+      return new Response(null, { status: 200, headers });
+    }
+
     if (url.pathname.startsWith("/api/auth/")) {
       return auth.handler(request);
     }
@@ -350,6 +394,21 @@ export default {
       const body: Record<string, string> = { email, password };
       if (isSignup) body.name = name || email.split("@")[0];
 
+      if (!isSignup) {
+        const mailRes = await fetch(mailAppUrl(env, "/api/auth/sign-in/email"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (mailRes.ok) {
+          const headers = new Headers();
+          headers.set("location", "/");
+          appendSetCookieHeaders(headers, mailRes.headers);
+          return new Response(null, { status: 303, headers });
+        }
+        return html(loginPage("signin", await readAuthError(mailRes)), mailRes.status);
+      }
+
       const targetPath = isSignup ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email";
       const innerReq = new Request(new URL(targetPath, url).toString(), {
         method: "POST",
@@ -363,13 +422,7 @@ export default {
         appendSetCookieHeaders(headers, innerRes.headers);
         return new Response(null, { status: 303, headers });
       }
-      let msg = "Authentication failed";
-      try {
-        const j = (await innerRes.json()) as { message?: string; error?: string };
-        msg = j.message || j.error || msg;
-      } catch {
-        // ignore
-      }
+      const msg = await readAuthError(innerRes);
       return html(loginPage(isSignup ? "signup" : "signin", msg), innerRes.status);
     }
 
@@ -409,7 +462,7 @@ export default {
       });
     }
 
-    const session = await auth.api.getSession({ headers: request.headers });
+    const session = await getCurrentSession(env, request, auth);
 
     if (url.pathname === "/") {
       if (!session) {
@@ -418,7 +471,7 @@ export default {
       }
       const { year, month } = parseMonth(url.searchParams.get("ym"));
       const { start, end } = monthRange(year, month);
-      const events = await listEventsInRange(env, session.user.id, start, end);
+      const events = await listEventsInRange(env, session.user.id, start, end, session);
       const now = new Date();
       const today = {
         y: now.getUTCFullYear(),
@@ -436,6 +489,57 @@ export default {
       );
     }
 
+    if (url.pathname === "/tasks") {
+      if (!session) {
+        const mode = url.searchParams.get("mode") === "signup" ? "signup" : "signin";
+        return html(loginPage(mode));
+      }
+      return html(tasksView({ userEmail: session.user.email }));
+    }
+
+    if (url.pathname === "/tasks-data") {
+      if (!session) return json({ error: "unauthorized" }, 401);
+      if (request.method === "GET") {
+        return json({ tasks: await listSharedTasks(env, session.user.email) });
+      }
+      if (request.method === "POST") {
+        const body = (await request.json().catch(() => null)) as {
+          title?: string;
+          date?: string | null;
+          scheduledTime?: string | null;
+          plannedTime?: number | null;
+        } | null;
+        if (!body) return json({ error: "invalid input" }, 400);
+        const title = body.title?.trim();
+        if (!title) return json({ error: "title required" }, 400);
+        if (body.date && !isValidTaskDate(body.date)) return json({ error: "invalid date" }, 400);
+        if (body.scheduledTime && !isValidTaskTime(body.scheduledTime)) return json({ error: "invalid time" }, 400);
+        const task = await createSharedTask(env, session.user.email, session.user.name, {
+          title,
+          date: body.date,
+          scheduledTime: body.scheduledTime,
+          plannedTime: body.plannedTime,
+        });
+        return json({ task }, 201);
+      }
+      return json({ error: "method not allowed" }, 405);
+    }
+
+    if (url.pathname.startsWith("/tasks-data/")) {
+      if (!session) return json({ error: "unauthorized" }, 401);
+      const rest = url.pathname.slice("/tasks-data/".length);
+      if (rest.endsWith("/complete") && request.method === "POST") {
+        const id = rest.slice(0, -"/complete".length);
+        const task = await toggleSharedTask(env, session.user.email, decodeURIComponent(id));
+        return task ? json({ task }) : json({ error: "not found" }, 404);
+      }
+      if (request.method === "DELETE") {
+        const ok = await archiveSharedTask(env, session.user.email, decodeURIComponent(rest));
+        return json({ ok }, ok ? 200 : 404);
+      }
+      return json({ error: "method not allowed" }, 405);
+    }
+
     if (url.pathname === "/events") {
       if (!session) return json({ error: "unauthorized" }, 401);
       if (request.method === "GET") {
@@ -447,7 +551,8 @@ export default {
           env,
           session.user.id,
           date,
-          date
+          date,
+          session
         );
         return json(events);
       }

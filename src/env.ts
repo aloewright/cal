@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  AUTH_DB?: D1Database;
   DP_DB: D1Database;
   CAL_ASSETS: R2Bucket;
   CAL_CACHE: KVNamespace;
@@ -10,6 +11,7 @@ export interface Env {
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
   BETTER_AUTH_TRUSTED_ORIGINS?: string;
+  MAIL_APP_URL?: string;
   SYNC_SECRET?: string;
   DP_WEBHOOK_URL?: string;
   REALTIMEKIT_ACCOUNT_ID?: string;

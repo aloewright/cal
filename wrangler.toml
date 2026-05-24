@@ -12,6 +12,7 @@ AI_GATEWAY_ACCOUNT_ID = "85d376fc54617bcb57185547f08e528b"
 AI_GATEWAY_NAME = "x"
 BETTER_AUTH_URL = "https://cal.fly.pm"
 BETTER_AUTH_TRUSTED_ORIGINS = "https://cal.fly.pm,https://cal.lazee.workers.dev"
+MAIL_APP_URL = "https://mail.fly.pm"
 DP_WEBHOOK_URL = "https://alex.coffee/api/sync/webhook"
 REALTIMEKIT_APP_ID = "806174ec-d6d3-479b-a02a-9db9da2b6333"
 INVITE_EMAIL_FROM = "calendar@fly.pm"
@@ -26,6 +27,11 @@ name = "INVITE_EMAIL"
 binding = "DB"
 database_name = "cal-db"
 database_id = "72c116f4-ba2c-4520-bafb-538e7ffe741e"
+
+[[d1_databases]]
+binding = "AUTH_DB"
+database_name = "fly-mail"
+database_id = "a61c11ce-aafe-490e-81df-c9ecbd49c652"
 
 [[d1_databases]]
 binding = "DP_DB"

@@ -134,6 +134,25 @@ const layout = (title: string, body: string): string => `<!doctype html>
   .day-events .row .meta { flex: 1; font-size: 0.85rem; }
   .day-events .row a { color: var(--foreground); font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
   .day-events .row button { font-size: 0.75rem; padding: 0.2rem 0.5rem; }
+  .day-events .row.readonly button { display: none; }
+  .day-events .source { color: var(--muted-foreground); font-size: 0.74rem; font-weight: 800; }
+  .day-events .badge { display: inline-block; margin-top: 0.12rem; padding: 0.02rem 0.38rem; border: 1px solid var(--border); border-radius: 999px; background: var(--muted); color: var(--muted-foreground); font-size: 0.68rem; }
+  .tasks-shell { max-width: 760px; }
+  .tasks-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+  .tasks-head h2 { margin: 0; font-family: var(--font-serif); font-size: 1.45rem; }
+  .tasks-head p { margin: 0.15rem 0 0; color: var(--muted-foreground); font-size: 0.9rem; }
+  .tasks-head .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0.45rem 0.75rem; border: 1px solid color-mix(in srgb, var(--border) 84%, transparent); border-radius: 999px; background: var(--card); color: inherit; font: inherit; font-weight: 800; white-space: nowrap; box-shadow: var(--shadow-sm); }
+  .task-form { display: grid; grid-template-columns: minmax(220px, 1fr) 150px 120px 110px auto; gap: 0.5rem; align-items: end; padding: 0.75rem; border: 1px solid color-mix(in srgb, var(--border) 88%, transparent); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow-sm); }
+  .task-form input, .task-form button { width: 100%; min-height: 38px; padding: 0.5rem 0.6rem; border: 1px solid var(--input); border-radius: var(--radius); background: var(--background); color: inherit; font: inherit; }
+  .task-form button { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); font-weight: 800; cursor: pointer; }
+  .task-list { display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.85rem; }
+  .task-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.7rem; align-items: center; padding: 0.65rem 0.75rem; border: 1px solid color-mix(in srgb, var(--border) 82%, transparent); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow-sm); }
+  .task-row.done .task-title { color: var(--muted-foreground); text-decoration: line-through; }
+  .task-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); }
+  .task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
+  .task-meta { color: var(--muted-foreground); font-size: 0.78rem; }
+  .task-delete { width: 34px; height: 34px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--muted-foreground); cursor: pointer; }
+  .task-delete:hover { border-color: var(--border); color: var(--foreground); background: var(--accent); }
   @media (max-width: 760px) {
     main { padding: 1rem 0.6rem 1.5rem; }
     .auth-shell { justify-items: start; padding: 16px; }
@@ -146,6 +165,8 @@ const layout = (title: string, body: string): string => `<!doctype html>
     .cell .tooltip { display: none; }
     .dow { font-size: 0.66rem; }
     dialog .location-row { grid-template-columns: minmax(0, 1fr); }
+    .task-form { grid-template-columns: 1fr 1fr; }
+    .task-form input:first-child, .task-form button { grid-column: 1 / -1; }
   }
 </style>
 </head>
@@ -187,6 +208,132 @@ export const loginPage = (mode: "signin" | "signup" = "signin", error?: string):
 </main>`
   );
 };
+
+export const tasksView = ({ userEmail }: { userEmail: string }): string => layout(
+  "cal · tasks",
+  `<a href="#" id="signout" class="signout-link" aria-label="Sign out" title="Sign out">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+    <path d="M16 17l5-5-5-5"></path>
+    <path d="M21 12H9"></path>
+  </svg>
+</a>
+<main class="tasks-shell">
+  <div class="tasks-head">
+    <div>
+      <h2>To do</h2>
+      <p>Tasks are shared with mail.fly.pm. Add a date and time to put one on Calendar.</p>
+    </div>
+    <a class="btn" href="/">Calendar</a>
+  </div>
+  <form class="task-form" id="task-form">
+    <input name="title" maxlength="200" placeholder="Add a task..." autocomplete="off" required />
+    <input name="date" type="date" aria-label="Date" />
+    <input name="time" type="time" aria-label="Time" />
+    <input name="minutes" type="number" min="0" max="1440" step="15" value="30" aria-label="Minutes" />
+    <button type="submit">Add</button>
+  </form>
+  <div class="task-list" id="task-list"></div>
+</main>
+<script>
+(() => {
+  const form = document.getElementById('task-form');
+  const list = document.getElementById('task-list');
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function today() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function taskDate(task) {
+    return task.startDate ? String(task.startDate).slice(0, 10) : '';
+  }
+
+  function meta(task) {
+    const parts = [taskDate(task), task.scheduledTime, task.plannedTime > 0 ? task.plannedTime + 'm' : null].filter(Boolean);
+    return parts.join(' · ');
+  }
+
+  function render(tasks) {
+    if (!tasks.length) {
+      list.innerHTML = '<div class="task-row"><div></div><div class="task-meta">No tasks yet.</div><div></div></div>';
+      return;
+    }
+    list.innerHTML = tasks.map(task => {
+      const detail = meta(task);
+      return '<div class="task-row' + (task.completed ? ' done' : '') + '" data-id="' + escapeHtml(task.id) + '">' +
+        '<input type="checkbox" data-toggle="' + escapeHtml(task.id) + '"' + (task.completed ? ' checked' : '') + ' aria-label="Toggle task" />' +
+        '<div><div class="task-title">' + escapeHtml(task.title) + '</div>' +
+        (detail ? '<div class="task-meta">' + escapeHtml(detail) + '</div>' : '') + '</div>' +
+        '<button class="task-delete" type="button" data-delete="' + escapeHtml(task.id) + '" aria-label="Delete task">×</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  async function load() {
+    const res = await fetch('/tasks-data', { credentials: 'include' });
+    if (!res.ok) {
+      list.innerHTML = '<div class="task-row"><div></div><div class="task-meta">Failed to load tasks.</div><div></div></div>';
+      return;
+    }
+    const data = await res.json();
+    render(data.tasks || []);
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const fd = new FormData(form);
+    const time = String(fd.get('time') || '');
+    const body = {
+      title: String(fd.get('title') || '').trim(),
+      date: String(fd.get('date') || '') || (time ? today() : null),
+      scheduledTime: time || null,
+      plannedTime: Number(fd.get('minutes') || 0),
+    };
+    if (!body.title) return;
+    const res = await fetch('/tasks-data', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      form.reset();
+      form.elements.minutes.value = '30';
+      await load();
+    }
+  });
+
+  list.addEventListener('click', async (event) => {
+    const toggle = event.target.closest('[data-toggle]');
+    const del = event.target.closest('[data-delete]');
+    if (toggle) {
+      await fetch('/tasks-data/' + encodeURIComponent(toggle.dataset.toggle) + '/complete', { method: 'POST', credentials: 'include' });
+      await load();
+    } else if (del) {
+      await fetch('/tasks-data/' + encodeURIComponent(del.dataset.delete), { method: 'DELETE', credentials: 'include' });
+      await load();
+    }
+  });
+
+  document.getElementById('signout').addEventListener('click', async (event) => {
+    event.preventDefault();
+    const res = await fetch('/api/auth/sign-out', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+      credentials: 'include',
+    });
+    if (res.ok) window.location.href = '/';
+  });
+
+  load();
+})();
+</script>`
+);
 
 interface MonthViewInput {
   userEmail: string;
@@ -267,6 +414,7 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
     <h2>${esc(monthLabel(year, month))}</h2>
     <a class="btn" href="/?ym=${next.y}-${String(next.m).padStart(2, "0")}">Next ›</a>
     <a class="btn" href="/">Today</a>
+    <a class="btn" href="/tasks">Tasks</a>
     <span class="spacer"></span>
   </div>
   <div class="grid">${dowLabels}${cells.join("")}</div>
@@ -310,6 +458,7 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
       ev.location ? 'Location: ' + ev.location : '',
       ev.invitee_email ? 'Invite: ' + ev.invitee_email : '',
       ev.waiting_room_enabled ? 'Waiting room' : '',
+      ev.source === 'google' && ev.calendar_summary ? ev.calendar_summary : '',
     ].filter(Boolean).join(' · ');
   }
 
@@ -319,12 +468,25 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
       return;
     }
     dlgEvents.innerHTML = list.map(ev => {
+      const isGoogle = ev.source === 'google';
+      const isTask = ev.source === 'task';
+      const readOnly = ev.read_only || isTask || isGoogle;
       const location = ev.location ? renderLocation(ev.location) : '';
-      return '<div class="row" data-id="' + ev.id + '">' +
+      const source = isTask
+        ? '<div class="source"><span class="badge">Tasks</span></div>'
+        : isGoogle
+          ? '<div class="source">' + escapeHtml(ev.calendar_summary || 'Google Calendar') + ' <span class="badge">' + escapeHtml(ev.access_role || 'reader') + (ev.writable ? ' · write' : ' · read') + '</span></div>'
+          : '<div class="source"><span class="badge">cal</span></div>';
+      const action = isTask
+        ? '<a href="/tasks">Open</a>'
+        : isGoogle
+          ? (ev.html_link ? '<a href="' + escapeHtml(ev.html_link) + '" target="_blank" rel="noopener noreferrer">Open</a>' : '')
+          : '<button type="button" data-del="' + escapeHtml(ev.id) + '">Delete</button>';
+      return '<div class="row' + (readOnly ? ' readonly' : '') + '" data-id="' + escapeHtml(ev.id) + '">' +
         '<div class="meta"><div><strong>' + escapeHtml(ev.title) + '</strong></div>' +
         '<div style="opacity:.7;font-size:.78rem">' + escapeHtml(fmtMeta(ev)) + '</div>' +
-        (location ? '<div style="font-size:.78rem">' + location + '</div>' : '') + '</div>' +
-        '<button type="button" data-del="' + ev.id + '">Delete</button>' +
+        (location ? '<div style="font-size:.78rem">' + location + '</div>' : '') + source + '</div>' +
+        action +
         '</div>';
     }).join('');
   }
@@ -582,9 +744,16 @@ const renderCell = (
         .map(
           (e) =>
             `<div class="ev"><div class="ev-title">${esc(e.title)}</div>` +
-            (e.start_time || e.description || e.location || e.invitee_email
+            (e.start_time || e.description || e.location || e.invitee_email || e.calendar_summary || e.source === "task"
               ? `<div class="ev-meta">${esc(
-                  [e.start_time, e.description, e.location, e.invitee_email ? `Invite: ${e.invitee_email}` : null]
+                  [
+                    e.start_time,
+                    e.description,
+                    e.location,
+                    e.invitee_email ? `Invite: ${e.invitee_email}` : null,
+                    e.calendar_summary,
+                    e.source === "task" ? "Tasks" : null,
+                  ]
                     .filter(Boolean)
                     .join(" · ")
                 )}</div>`

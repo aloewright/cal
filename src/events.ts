@@ -1,4 +1,6 @@
 import type { Env } from "./env";
+import type { AppSession } from "./auth";
+import { listTimedTasksInRange } from "./tasks";
 
 export interface CalEvent {
   id: string;
@@ -18,6 +20,13 @@ export interface CalEvent {
   updated_at: number;
   dp_task_id: string | null;
   completed: number;
+  source?: "local" | "google" | "task";
+  read_only?: number;
+  calendar_summary?: string | null;
+  calendar_color?: string | null;
+  access_role?: string | null;
+  writable?: number;
+  html_link?: string | null;
 }
 
 export const eventsTableDDL = `
@@ -80,15 +89,121 @@ export const listEventsInRange = async (
   env: Env,
   userId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  session?: AppSession
 ): Promise<CalEvent[]> => {
   const { results } = await env.DB.prepare(
     `SELECT * FROM cal_event WHERE user_id = ? AND event_date >= ? AND event_date <= ? ORDER BY event_date, start_time`
   )
     .bind(userId, startDate, endDate)
     .all<CalEvent>();
-  return results ?? [];
+  const localEvents = (results ?? [])
+    .filter((event) => !event.dp_task_id)
+    .map((event) => ({
+      ...event,
+      source: "local" as const,
+      read_only: 0,
+      writable: 1,
+    }));
+  const googleEvents = session?.source === "mail"
+    ? await listGoogleEventsInRange(env, session, startDate, endDate)
+    : [];
+  const taskEvents = session?.user.email
+    ? (await listTimedTasksInRange(env, session.user.email, startDate, endDate)).map((task) => ({
+        id: `task:${task.id}`,
+        user_id: userId,
+        event_date: task.startDate?.slice(0, 10) ?? startDate,
+        start_time: task.scheduledTime,
+        title: task.title,
+        description: task.plannedTime > 0 ? `${task.plannedTime} minute task` : null,
+        location: null,
+        invitee_email: null,
+        meeting_id: null,
+        host_email: null,
+        waiting_room_enabled: 0,
+        ai_summary_sent_at: null,
+        ai_summary_session_id: null,
+        created_at: Date.parse(task.createdAt) || 0,
+        updated_at: Date.parse(task.updatedAt) || 0,
+        dp_task_id: task.id,
+        completed: task.completed ? 1 : 0,
+        source: "task" as const,
+        read_only: 0,
+        writable: 1,
+      }))
+    : [];
+  return [...localEvents, ...taskEvents, ...googleEvents].sort((a, b) => (
+    a.event_date.localeCompare(b.event_date) ||
+    (a.start_time ?? "").localeCompare(b.start_time ?? "") ||
+    a.title.localeCompare(b.title)
+  ));
 };
+
+interface MailCalendarEvent {
+  id: string;
+  calendarSummary: string;
+  calendarColor: string | null;
+  accessRole: string | null;
+  writable: boolean;
+  title: string;
+  description: string | null;
+  eventDate: string;
+  startTime: string | null;
+  htmlLink: string | null;
+  source: "google";
+}
+
+async function listGoogleEventsInRange(
+  env: Env,
+  session: AppSession,
+  startDate: string,
+  endDate: string
+): Promise<CalEvent[]> {
+  if (!session.authCookie) return [];
+
+  const url = new URL("/api/v1/calendars/events", env.MAIL_APP_URL ?? "https://mail.fly.pm");
+  url.searchParams.set("start", startDate);
+  url.searchParams.set("end", endDate);
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      accept: "application/json",
+      cookie: `${session.authCookie.name}=${session.authCookie.value}`,
+    },
+  });
+  if (!res.ok) {
+    console.warn("[google-calendar] mail event fetch failed", res.status);
+    return [];
+  }
+
+  const data = (await res.json().catch(() => null)) as { events?: MailCalendarEvent[] } | null;
+  return (data?.events ?? []).map((event) => ({
+    id: `google:${event.id}`,
+    user_id: "",
+    event_date: event.eventDate,
+    start_time: event.startTime,
+    title: event.title,
+    description: event.description,
+    location: null,
+    invitee_email: null,
+    meeting_id: null,
+    host_email: null,
+    waiting_room_enabled: 0,
+    ai_summary_sent_at: null,
+    ai_summary_session_id: null,
+    created_at: 0,
+    updated_at: 0,
+    dp_task_id: null,
+    completed: 0,
+    source: "google",
+    read_only: event.writable ? 0 : 1,
+    calendar_summary: event.calendarSummary,
+    calendar_color: event.calendarColor,
+    access_role: event.accessRole,
+    writable: event.writable ? 1 : 0,
+    html_link: event.htmlLink,
+  }));
+}
 
 export const getEventByMeetingId = async (
   env: Env,
