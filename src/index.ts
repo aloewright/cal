@@ -4,12 +4,14 @@ import type { Env } from "./env";
 import {
   createEvent,
   deleteEvent,
-  eventsTableDDL,
+  ensureEventsSchema,
   listEventsInRange,
 } from "./events";
+import { isValidEmail, sendCalendarInvite } from "./invitations";
+import { addRealtimeKitParticipant, createRealtimeKitMeeting } from "./realtimekit";
 import { reconcile } from "./reconcile";
 import { handleSyncWebhook, sendWebhook } from "./sync";
-import { loginPage, monthView } from "./views";
+import { loginPage, meetingPage, monthView } from "./views";
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -266,11 +268,7 @@ export default {
         auth.options
       );
       await runMigrations();
-      const statements = eventsTableDDL
-        .split(";")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      await env.DB.batch(statements.map((s) => env.DB.prepare(s)));
+      await ensureEventsSchema(env);
       return json({
         ok: true,
         created: toBeCreated.map((t: { table: string }) => t.table),
@@ -327,16 +325,42 @@ export default {
           title?: string;
           start_time?: string | null;
           description?: string | null;
+          location?: string | null;
+          invitee_email?: string | null;
         } | null;
         if (!body || !body.event_date || !isValidDate(body.event_date) || !body.title) {
           return json({ error: "invalid input" }, 400);
+        }
+        const inviteeEmail = body.invitee_email?.trim() || null;
+        if (inviteeEmail && !isValidEmail(inviteeEmail)) {
+          return json({ error: "invalid invitee email" }, 400);
         }
         const created = await createEvent(env, session.user.id, {
           event_date: body.event_date,
           title: body.title.slice(0, 200),
           start_time: body.start_time ?? null,
           description: body.description ?? null,
+          location: body.location ? body.location.slice(0, 500) : null,
+          invitee_email: inviteeEmail ? inviteeEmail.slice(0, 320) : null,
         });
+        let invite: { sent: boolean; error?: string } | undefined;
+        if (created.invitee_email) {
+          try {
+            invite = await sendCalendarInvite(
+              env,
+              created,
+              session.user.email,
+              url.origin
+            );
+          } catch (err) {
+            console.error("[invite] send failed", err);
+            invite = {
+              sent: false,
+              error:
+                err instanceof Error ? err.message : "Could not send invitation",
+            };
+          }
+        }
         await sendWebhook(env, {
           op: "upsert",
           from: "cal",
@@ -349,12 +373,63 @@ export default {
             event_date: created.event_date,
             start_time: created.start_time,
             description: created.description,
+            location: created.location,
             completed: false,
           },
         });
-        return json(created, 201);
+        return json(invite ? { ...created, invite } : created, 201);
       }
       return json({ error: "method not allowed" }, 405);
+    }
+
+    if (url.pathname === "/api/realtimekit/call" && request.method === "POST") {
+      if (!session) return json({ error: "unauthorized" }, 401);
+      const body = (await request.json().catch(() => null)) as {
+        title?: string;
+      } | null;
+      const title = (body?.title || "Calendar video call").slice(0, 100);
+      try {
+        const meeting = await createRealtimeKitMeeting(env, title);
+        return json({
+          meetingId: meeting.id,
+          url: new URL(`/meet/${meeting.id}`, url).toString(),
+        });
+      } catch (err) {
+        console.error("[realtimekit] create call failed", err);
+        return json(
+          {
+            error:
+              err instanceof Error ? err.message : "Could not create video call",
+          },
+          502
+        );
+      }
+    }
+
+    if (url.pathname.startsWith("/meet/") && request.method === "GET") {
+      const meetingId = url.pathname.slice("/meet/".length);
+      if (!meetingId) return new Response("Not found", { status: 404 });
+      const guestEmail = url.searchParams.get("email")?.trim() ?? "";
+      if (!session && !isValidEmail(guestEmail)) {
+        return html(loginPage("signin", "Sign in to join the video call"), 401);
+      }
+      try {
+        const participant = await addRealtimeKitParticipant(env, meetingId, {
+          id: session?.user.id ?? "guest",
+          email: session?.user.email ?? guestEmail,
+          name: session?.user.name ?? guestEmail,
+        });
+        return html(meetingPage(participant.token));
+      } catch (err) {
+        console.error("[realtimekit] join call failed", err);
+        return html(
+          loginPage(
+            "signin",
+            err instanceof Error ? err.message : "Could not join video call"
+          ),
+          502
+        );
+      }
     }
 
     if (url.pathname.startsWith("/events/")) {

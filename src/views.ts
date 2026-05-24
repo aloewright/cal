@@ -120,6 +120,9 @@ const layout = (title: string, body: string): string => `<!doctype html>
   dialog label { display: block; margin: 0.55rem 0 0.2rem; color: var(--muted-foreground); font-size: 0.8rem; font-weight: 800; }
   dialog input, dialog textarea { width: 100%; padding: 0.58rem 0.65rem; border: 1px solid var(--input); border-radius: var(--radius); background: var(--background); color: inherit; font: inherit; outline: none; }
   dialog input:focus, dialog textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent); }
+  dialog .location-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.45rem; align-items: center; }
+  dialog .location-row button { white-space: nowrap; padding-inline: 0.7rem; }
+  dialog .field-note { min-height: 1.1em; margin-top: 0.2rem; color: var(--muted-foreground); font-size: 0.76rem; }
   dialog .actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
   dialog button { padding: 0.48rem 0.85rem; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: inherit; font: inherit; font-weight: 800; cursor: pointer; }
   dialog button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
@@ -127,6 +130,7 @@ const layout = (title: string, body: string): string => `<!doctype html>
   .day-events .row { display: flex; gap: 0.5rem; align-items: center; padding: 4px 0; border-bottom: 1px dashed var(--border); }
   .day-events .row:last-child { border-bottom: 0; }
   .day-events .row .meta { flex: 1; font-size: 0.85rem; }
+  .day-events .row a { color: var(--foreground); font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
   .day-events .row button { font-size: 0.75rem; padding: 0.2rem 0.5rem; }
   @media (max-width: 760px) {
     main { padding: 1rem 0.6rem 1.5rem; }
@@ -139,6 +143,7 @@ const layout = (title: string, body: string): string => `<!doctype html>
     .pill { display: none; }
     .cell .tooltip { display: none; }
     .dow { font-size: 0.66rem; }
+    dialog .location-row { grid-template-columns: minmax(0, 1fr); }
   }
 </style>
 </head>
@@ -271,6 +276,13 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
     <label>Title</label><input name="title" required maxlength="200" />
     <label>Time (optional, e.g. 09:30)</label><input name="start_time" pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$" />
     <label>Description (optional)</label><textarea name="description" rows="2" maxlength="1000"></textarea>
+    <label>Location</label>
+    <div class="location-row">
+      <input name="location" maxlength="500" placeholder="Place, address, or video call link" />
+      <button type="button" id="create-call">Video call</button>
+    </div>
+    <div class="field-note" id="call-status"></div>
+    <label>Invite by email (optional)</label><input name="invitee_email" type="email" autocomplete="email" maxlength="320" />
     <input type="hidden" name="event_date" />
     <div class="actions">
       <button type="button" id="dlg-close">Close</button>
@@ -284,10 +296,16 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
   const dlgTitle = document.getElementById('dlg-title');
   const dlgEvents = document.getElementById('dlg-events');
   const addForm = document.getElementById('add-form');
+  const createCallButton = document.getElementById('create-call');
+  const callStatus = document.getElementById('call-status');
 
   function fmtMeta(ev) {
-    const t = ev.start_time ? ev.start_time + ' · ' : '';
-    return t + (ev.description || '');
+    return [
+      ev.start_time || '',
+      ev.description || '',
+      ev.location ? 'Location: ' + ev.location : '',
+      ev.invitee_email ? 'Invite: ' + ev.invitee_email : '',
+    ].filter(Boolean).join(' · ');
   }
 
   function renderEvents(list) {
@@ -296,9 +314,11 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
       return;
     }
     dlgEvents.innerHTML = list.map(ev => {
+      const location = ev.location ? renderLocation(ev.location) : '';
       return '<div class="row" data-id="' + ev.id + '">' +
         '<div class="meta"><div><strong>' + escapeHtml(ev.title) + '</strong></div>' +
-        '<div style="opacity:.7;font-size:.78rem">' + escapeHtml(fmtMeta(ev)) + '</div></div>' +
+        '<div style="opacity:.7;font-size:.78rem">' + escapeHtml(fmtMeta(ev)) + '</div>' +
+        (location ? '<div style="font-size:.78rem">' + location + '</div>' : '') + '</div>' +
         '<button type="button" data-del="' + ev.id + '">Delete</button>' +
         '</div>';
     }).join('');
@@ -306,6 +326,16 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
 
   function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function isSafeHref(s) {
+    const lower = String(s).toLowerCase();
+    return lower.startsWith('https://') || lower.startsWith('http://') || String(s).startsWith('/meet/');
+  }
+
+  function renderLocation(location) {
+    if (!isSafeHref(location)) return escapeHtml(location);
+    return '<a href="' + escapeHtml(location) + '" target="_blank" rel="noopener">Open location</a>';
   }
 
   async function fetchDay(date) {
@@ -321,6 +351,7 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
       dlgTitle.textContent = date;
       addForm.elements.event_date.value = date;
       addForm.reset();
+      callStatus.textContent = '';
       addForm.elements.event_date.value = date;
       const list = await fetchDay(date);
       renderEvents(list);
@@ -330,6 +361,28 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
 
   document.getElementById('dlg-close').addEventListener('click', () => dialog.close());
 
+  createCallButton.addEventListener('click', async () => {
+    const title = addForm.elements.title.value || 'Calendar video call';
+    createCallButton.disabled = true;
+    callStatus.textContent = 'Creating video call...';
+    try {
+      const res = await fetch('/api/realtimekit/call', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title }),
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not create video call');
+      addForm.elements.location.value = data.url;
+      callStatus.textContent = 'Video call link added. Recording starts when someone joins.';
+    } catch (err) {
+      callStatus.textContent = err instanceof Error ? err.message : 'Could not create video call';
+    } finally {
+      createCallButton.disabled = false;
+    }
+  });
+
   addForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(addForm);
@@ -338,6 +391,8 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
       title: fd.get('title'),
       start_time: fd.get('start_time') || null,
       description: fd.get('description') || null,
+      location: fd.get('location') || null,
+      invitee_email: fd.get('invitee_email') || null,
     };
     const res = await fetch('/events', {
       method: 'POST',
@@ -346,6 +401,10 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
       credentials: 'include',
     });
     if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data.invite && data.invite.sent === false && data.invite.error) {
+        alert(data.invite.error);
+      }
       window.location.reload();
     }
   });
@@ -374,6 +433,42 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
   return layout("Calendar", body);
 };
 
+export const meetingPage = (authToken: string): string => {
+  const tokenJson = JSON.stringify(authToken);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="theme-color" content="#0f172a" />
+<title>Video call</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; background: #111827; }
+  body { overflow: hidden; font-family: ui-sans-serif, system-ui, sans-serif; }
+  rtk-meeting { display: block; width: 100vw; height: 100vh; }
+  .meeting-error { min-height: 100vh; display: grid; place-items: center; padding: 24px; color: white; }
+  .meeting-error div { max-width: 420px; line-height: 1.5; }
+</style>
+<script type="module">
+  import { defineCustomElements } from "https://cdn.jsdelivr.net/npm/@cloudflare/realtimekit-ui@latest/loader/index.es2017.js";
+  defineCustomElements();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@cloudflare/realtimekit@latest/dist/browser.js"></script>
+</head>
+<body>
+  <rtk-meeting id="my-meeting" show-setup-screen="true"></rtk-meeting>
+  <script>
+    const authToken = ${tokenJson};
+    RealtimeKitClient.init({ authToken }).then((meeting) => {
+      document.getElementById("my-meeting").meeting = meeting;
+    }).catch((error) => {
+      document.body.innerHTML = '<main class="meeting-error"><div><h1>Could not join video call</h1><p>' + String(error && error.message ? error.message : error).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) + '</p></div></main>';
+    });
+  </script>
+</body>
+</html>`;
+};
+
 const renderCell = (
   y: number,
   m: number,
@@ -394,8 +489,12 @@ const renderCell = (
         .map(
           (e) =>
             `<div class="ev"><div class="ev-title">${esc(e.title)}</div>` +
-            (e.start_time || e.description
-              ? `<div class="ev-meta">${esc(e.start_time ?? "")}${e.start_time && e.description ? " · " : ""}${esc(e.description ?? "")}</div>`
+            (e.start_time || e.description || e.location || e.invitee_email
+              ? `<div class="ev-meta">${esc(
+                  [e.start_time, e.description, e.location, e.invitee_email ? `Invite: ${e.invitee_email}` : null]
+                    .filter(Boolean)
+                    .join(" · ")
+                )}</div>`
               : "") +
             `</div>`
         )

@@ -12,6 +12,7 @@ export interface SyncEventPayload {
     event_date: string;
     start_time: string | null;
     description: string | null;
+    location?: string | null;
     completed: boolean;
   };
 }
@@ -140,13 +141,14 @@ export const handleSyncWebhook = async (
       );
     }
     await env.DB.prepare(
-      `UPDATE cal_event SET title = ?, event_date = ?, start_time = ?, description = ?, completed = ?, dp_task_id = ?, updated_at = ? WHERE id = ? AND user_id = ?`
+      `UPDATE cal_event SET title = ?, event_date = ?, start_time = ?, description = ?, location = COALESCE(?, location), completed = ?, dp_task_id = ?, updated_at = ? WHERE id = ? AND user_id = ?`
     )
       .bind(
         payload.event.title,
         payload.event.event_date,
         payload.event.start_time,
         payload.event.description,
+        payload.event.location ?? null,
         payload.event.completed ? 1 : 0,
         payload.source_id,
         now,
@@ -162,7 +164,7 @@ export const handleSyncWebhook = async (
 
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO cal_event (id, user_id, event_date, start_time, title, description, created_at, updated_at, dp_task_id, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO cal_event (id, user_id, event_date, start_time, title, description, location, created_at, updated_at, dp_task_id, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -171,6 +173,7 @@ export const handleSyncWebhook = async (
       payload.event.start_time,
       payload.event.title,
       payload.event.description,
+      payload.event.location ?? null,
       now,
       now,
       payload.source_id,

@@ -9,6 +9,8 @@ const event = (overrides: Partial<CalEvent> = {}): CalEvent => ({
   start_time: "10:00",
   title: "Ship tests",
   description: "Cover calendar interactions",
+  location: null,
+  invitee_email: null,
   created_at: 1,
   updated_at: 1,
   dp_task_id: null,
@@ -53,6 +55,12 @@ describe("calendar month interactions", () => {
         if (url === "/events" && init?.method === "POST") {
           return Response.json(event({ title: "New event" }), { status: 201 });
         }
+        if (url === "/api/realtimekit/call" && init?.method === "POST") {
+          return Response.json({
+            meetingId: "meeting-1",
+            url: "https://cal.fly.pm/meet/meeting-1",
+          });
+        }
         if (url.startsWith("/events/") && init?.method === "DELETE") {
           return Response.json({ ok: true });
         }
@@ -94,6 +102,8 @@ describe("calendar month interactions", () => {
     (form.elements.namedItem("title") as HTMLInputElement).value = "New event";
     (form.elements.namedItem("start_time") as HTMLInputElement).value = "14:15";
     (form.elements.namedItem("description") as HTMLTextAreaElement).value = "From interaction test";
+    (form.elements.namedItem("location") as HTMLInputElement).value = "https://cal.fly.pm/meet/meeting-1";
+    (form.elements.namedItem("invitee_email") as HTMLInputElement).value = "guest@example.com";
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 
     await vi.waitFor(() => {
@@ -111,8 +121,36 @@ describe("calendar month interactions", () => {
         title: "New event",
         start_time: "14:15",
         description: "From interaction test",
+        location: "https://cal.fly.pm/meet/meeting-1",
+        invitee_email: "guest@example.com",
       });
       expect(reload).toHaveBeenCalled();
+    });
+  });
+
+  it("creates a RealtimeKit call and fills the location field", async () => {
+    renderInteractiveMonth();
+
+    document.querySelector<HTMLElement>('[data-date="2026-05-22"]')?.click();
+    await vi.waitFor(() => expect(document.getElementById("day-dialog")?.hasAttribute("open")).toBe(true));
+
+    const form = document.getElementById("add-form") as HTMLFormElement;
+    (form.elements.namedItem("title") as HTMLInputElement).value = "Video planning";
+    document.getElementById("create-call")?.click();
+
+    await vi.waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/realtimekit/call",
+        expect.objectContaining({
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+        })
+      );
+      expect((form.elements.namedItem("location") as HTMLInputElement).value).toBe(
+        "https://cal.fly.pm/meet/meeting-1"
+      );
+      expect(document.getElementById("call-status")?.textContent).toContain("Video call link added");
     });
   });
 });

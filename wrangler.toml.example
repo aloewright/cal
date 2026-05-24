@@ -5,9 +5,15 @@ compatibility_date = "2026-05-17"
 [vars]
 AI_GATEWAY_ACCOUNT_ID = "replace-with-account-id"
 AI_GATEWAY_NAME = "replace-with-gateway-name"
+REALTIMEKIT_ACCOUNT_ID = "replace-with-account-id"
+REALTIMEKIT_APP_ID = "806174ec-d6d3-479b-a02a-9db9da2b6333"
+INVITE_EMAIL_FROM = "calendar@fly.pm"
 
 [ai]
 binding = "AI"
+
+[[send_email]]
+name = "INVITE_EMAIL"
 
 [[d1_databases]]
 binding = "DB"

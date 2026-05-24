@@ -11,6 +11,8 @@ const event = (overrides: Partial<CalEvent> = {}): CalEvent => ({
   start_time: "09:30",
   title: "Planning",
   description: "Review launch list",
+  location: null,
+  invitee_email: null,
   created_at: 1,
   updated_at: 1,
   dp_task_id: null,
