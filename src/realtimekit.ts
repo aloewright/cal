@@ -85,7 +85,6 @@ export const createRealtimeKitMeeting = async (
   const { appId } = requireRealtimeKitConfig(env);
   const storageConfig = parseStorageConfig(env);
   const recordingConfig: Record<string, unknown> = {
-    file_name_prefix: "storage.fly.app/cal",
     video_config: { export_file: true, codec: "H264" },
   };
   if (storageConfig) {
