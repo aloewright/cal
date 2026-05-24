@@ -11,6 +11,11 @@ const event = (overrides: Partial<CalEvent> = {}): CalEvent => ({
   description: "Cover calendar interactions",
   location: null,
   invitee_email: null,
+  meeting_id: null,
+  host_email: null,
+  waiting_room_enabled: 0,
+  ai_summary_sent_at: null,
+  ai_summary_session_id: null,
   created_at: 1,
   updated_at: 1,
   dp_task_id: null,
@@ -103,7 +108,9 @@ describe("calendar month interactions", () => {
     (form.elements.namedItem("start_time") as HTMLInputElement).value = "14:15";
     (form.elements.namedItem("description") as HTMLTextAreaElement).value = "From interaction test";
     (form.elements.namedItem("location") as HTMLInputElement).value = "https://cal.fly.pm/meet/meeting-1";
+    (form.elements.namedItem("meeting_id") as HTMLInputElement).value = "meeting-1";
     (form.elements.namedItem("invitee_email") as HTMLInputElement).value = "guest@example.com";
+    (form.elements.namedItem("waiting_room_enabled") as HTMLInputElement).checked = true;
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 
     await vi.waitFor(() => {
@@ -123,6 +130,8 @@ describe("calendar month interactions", () => {
         description: "From interaction test",
         location: "https://cal.fly.pm/meet/meeting-1",
         invitee_email: "guest@example.com",
+        meeting_id: "meeting-1",
+        waiting_room_enabled: true,
       });
       expect(reload).toHaveBeenCalled();
     });
@@ -136,6 +145,7 @@ describe("calendar month interactions", () => {
 
     const form = document.getElementById("add-form") as HTMLFormElement;
     (form.elements.namedItem("title") as HTMLInputElement).value = "Video planning";
+    (form.elements.namedItem("waiting_room_enabled") as HTMLInputElement).checked = true;
     document.getElementById("create-call")?.click();
 
     await vi.waitFor(() => {
@@ -150,7 +160,13 @@ describe("calendar month interactions", () => {
       expect((form.elements.namedItem("location") as HTMLInputElement).value).toBe(
         "https://cal.fly.pm/meet/meeting-1"
       );
+      expect((form.elements.namedItem("meeting_id") as HTMLInputElement).value).toBe("meeting-1");
       expect(document.getElementById("call-status")?.textContent).toContain("Video call link added");
+    });
+    const call = vi.mocked(fetch).mock.calls.find(([url, init]) => url === "/api/realtimekit/call" && init?.method === "POST");
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+      title: "Video planning",
+      waiting_room_enabled: true,
     });
   });
 });

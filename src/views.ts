@@ -122,6 +122,8 @@ const layout = (title: string, body: string): string => `<!doctype html>
   dialog input:focus, dialog textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent); }
   dialog .location-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.45rem; align-items: center; }
   dialog .location-row button { white-space: nowrap; padding-inline: 0.7rem; }
+  dialog .check-row { display: flex; align-items: center; gap: 0.45rem; margin-top: 0.65rem; color: var(--foreground); font-weight: 800; font-size: 0.84rem; }
+  dialog .check-row input { width: auto; }
   dialog .field-note { min-height: 1.1em; margin-top: 0.2rem; color: var(--muted-foreground); font-size: 0.76rem; }
   dialog .actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
   dialog button { padding: 0.48rem 0.85rem; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: inherit; font: inherit; font-weight: 800; cursor: pointer; }
@@ -282,7 +284,9 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
       <button type="button" id="create-call">Video call</button>
     </div>
     <div class="field-note" id="call-status"></div>
+    <label class="check-row"><input type="checkbox" name="waiting_room_enabled" value="1" /> Waiting room</label>
     <label>Invite by email (optional)</label><input name="invitee_email" type="email" autocomplete="email" maxlength="320" />
+    <input type="hidden" name="meeting_id" />
     <input type="hidden" name="event_date" />
     <div class="actions">
       <button type="button" id="dlg-close">Close</button>
@@ -305,6 +309,7 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
       ev.description || '',
       ev.location ? 'Location: ' + ev.location : '',
       ev.invitee_email ? 'Invite: ' + ev.invitee_email : '',
+      ev.waiting_room_enabled ? 'Waiting room' : '',
     ].filter(Boolean).join(' · ');
   }
 
@@ -363,19 +368,23 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
 
   createCallButton.addEventListener('click', async () => {
     const title = addForm.elements.title.value || 'Calendar video call';
+    const waitingRoomEnabled = addForm.elements.waiting_room_enabled.checked;
     createCallButton.disabled = true;
     callStatus.textContent = 'Creating video call...';
     try {
       const res = await fetch('/api/realtimekit/call', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title, waiting_room_enabled: waitingRoomEnabled }),
         credentials: 'include',
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not create video call');
       addForm.elements.location.value = data.url;
-      callStatus.textContent = 'Video call link added. Recording starts when someone joins.';
+      addForm.elements.meeting_id.value = data.meetingId || '';
+      callStatus.textContent = waitingRoomEnabled
+        ? 'Video call link added. Recording, chat, AI notes, and waiting room are on.'
+        : 'Video call link added. Recording, chat, and AI notes are on.';
     } catch (err) {
       callStatus.textContent = err instanceof Error ? err.message : 'Could not create video call';
     } finally {
@@ -393,6 +402,8 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
       description: fd.get('description') || null,
       location: fd.get('location') || null,
       invitee_email: fd.get('invitee_email') || null,
+      meeting_id: fd.get('meeting_id') || null,
+      waiting_room_enabled: fd.get('waiting_room_enabled') === '1',
     };
     const res = await fetch('/events', {
       method: 'POST',
@@ -433,8 +444,18 @@ export const monthView = ({ userEmail, year, month, events, today }: MonthViewIn
   return layout("Calendar", body);
 };
 
-export const meetingPage = (authToken: string): string => {
+export const meetingPage = ({
+  authToken,
+  meetingId,
+  isHost,
+}: {
+  authToken: string;
+  meetingId: string;
+  isHost: boolean;
+}): string => {
   const tokenJson = JSON.stringify(authToken);
+  const meetingIdJson = JSON.stringify(meetingId);
+  const isHostJson = JSON.stringify(isHost);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -446,6 +467,18 @@ export const meetingPage = (authToken: string): string => {
   html, body { margin: 0; width: 100%; height: 100%; background: #111827; }
   body { overflow: hidden; font-family: ui-sans-serif, system-ui, sans-serif; }
   rtk-meeting { display: block; width: 100vw; height: 100vh; }
+  .host-controls { position: fixed; z-index: 20; top: 12px; left: 12px; display: flex; gap: 6px; align-items: center; padding: 7px; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; background: rgba(17,24,39,.82); color: white; backdrop-filter: blur(10px); }
+  .host-controls[hidden] { display: none; }
+  .host-controls button { min-height: 32px; border: 1px solid rgba(255,255,255,.22); border-radius: 7px; background: rgba(255,255,255,.08); color: white; font: 700 12px/1 ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
+  .host-controls button:hover { background: rgba(255,255,255,.16); }
+  .host-controls .state { min-width: 78px; color: rgba(255,255,255,.72); font-size: 12px; }
+  .recording-active rtk-participants,
+  .recording-active rtk-participant-list,
+  .recording-active rtk-participants-sidebar,
+  .recording-active rtk-participant-count,
+  .recording-active [data-testid*="participant" i],
+  .recording-active [class*="participant" i],
+  .recording-active [part*="participant" i] { display: none !important; visibility: hidden !important; }
   .meeting-error { min-height: 100vh; display: grid; place-items: center; padding: 24px; color: white; }
   .meeting-error div { max-width: 420px; line-height: 1.5; }
 </style>
@@ -454,13 +487,73 @@ export const meetingPage = (authToken: string): string => {
   defineCustomElements();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@cloudflare/realtimekit@latest/dist/browser.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@cloudflare/realtimekit-virtual-background@latest/dist/index.iife.js"></script>
 </head>
 <body>
+  <div class="host-controls" id="host-controls" hidden>
+    <button type="button" data-action="start">Rec</button>
+    <button type="button" data-action="pause">Pause</button>
+    <button type="button" data-action="resume">Resume</button>
+    <button type="button" data-action="stop">Stop</button>
+    <button type="button" id="blur-bg">Blur</button>
+    <span class="state" id="recording-state">Idle</span>
+  </div>
   <rtk-meeting id="my-meeting" show-setup-screen="true"></rtk-meeting>
   <script>
     const authToken = ${tokenJson};
+    const meetingId = ${meetingIdJson};
+    const isHost = ${isHostJson};
+    const controls = document.getElementById("host-controls");
+    const state = document.getElementById("recording-state");
+    const setRecording = (active, label) => {
+      document.body.classList.toggle("recording-active", Boolean(active));
+      if (state) state.textContent = label || (active ? "Recording" : "Idle");
+    };
+    const recordingAction = async (action) => {
+      const res = await fetch("/api/realtimekit/recording/" + encodeURIComponent(meetingId) + "/" + action, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Recording update failed");
+      const status = data.recording && data.recording.status ? data.recording.status : action;
+      setRecording(status === "INVOKED" || status === "RECORDING" || status === "PAUSED", status);
+    };
     RealtimeKitClient.init({ authToken }).then((meeting) => {
       document.getElementById("my-meeting").meeting = meeting;
+      if (isHost) controls.hidden = false;
+      if (meeting.recording && typeof meeting.recording.on === "function") {
+        meeting.recording.on("started", () => setRecording(true, "Recording"));
+        meeting.recording.on("stopped", () => setRecording(false, "Stopped"));
+        meeting.recording.on("paused", () => setRecording(true, "Paused"));
+        meeting.recording.on("resumed", () => setRecording(true, "Recording"));
+      }
+      setRecording(true, "Auto rec");
+      controls.addEventListener("click", async (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        button.disabled = true;
+        try {
+          await recordingAction(button.dataset.action);
+        } catch (error) {
+          state.textContent = error && error.message ? error.message : "Failed";
+        } finally {
+          button.disabled = false;
+        }
+      });
+      document.getElementById("blur-bg").addEventListener("click", async (event) => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+          if (window.RealtimeKitVideoBackgroundTransformer && window.RealtimeKitVideoBackgroundTransformer.isSupported()) {
+            await meeting.self.setVideoMiddlewareGlobalConfig({ disablePerFrameCanvasRendering: true });
+            const transformer = await window.RealtimeKitVideoBackgroundTransformer.init({ meeting });
+            meeting.self.addVideoMiddleware(await transformer.createBackgroundBlurVideoMiddleware(50));
+          }
+        } finally {
+          button.disabled = false;
+        }
+      });
     }).catch((error) => {
       document.body.innerHTML = '<main class="meeting-error"><div><h1>Could not join video call</h1><p>' + String(error && error.message ? error.message : error).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) + '</p></div></main>';
     });

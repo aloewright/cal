@@ -136,3 +136,42 @@ export const sendCalendarInvite = async (
   });
   return { sent: true };
 };
+
+export const sendMeetingSummaryEmail = async (
+  env: Env,
+  event: CalEvent,
+  summary: string,
+  transcriptUrl?: string | null
+): Promise<{ sent: boolean; error?: string }> => {
+  const hostEmail = event.host_email;
+  if (!hostEmail) return { sent: false, error: "Meeting host email is missing" };
+  if (!env.INVITE_EMAIL) {
+    return { sent: false, error: "Summary email is not configured" };
+  }
+
+  const title = event.title || "Calendar meeting";
+  const text = [
+    `AI summary for ${title}`,
+    "",
+    summary,
+    transcriptUrl ? "" : null,
+    transcriptUrl ? `Transcript: ${transcriptUrl}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `<p>AI summary for <strong>${escapeHtml(title)}</strong></p><pre style="white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">${escapeHtml(summary)}</pre>${
+    transcriptUrl
+      ? `<p><a href="${escapeHtml(transcriptUrl)}">Download transcript</a></p>`
+      : ""
+  }`;
+
+  await env.INVITE_EMAIL.send({
+    from: env.INVITE_EMAIL_FROM || DEFAULT_FROM,
+    to: hostEmail,
+    subject: `AI meeting summary: ${title}`,
+    text,
+    html,
+  });
+  return { sent: true };
+};

@@ -9,6 +9,11 @@ export interface CalEvent {
   description: string | null;
   location: string | null;
   invitee_email: string | null;
+  meeting_id: string | null;
+  host_email: string | null;
+  waiting_room_enabled: number;
+  ai_summary_sent_at: number | null;
+  ai_summary_session_id: string | null;
   created_at: number;
   updated_at: number;
   dp_task_id: string | null;
@@ -25,6 +30,11 @@ CREATE TABLE IF NOT EXISTS cal_event (
   description TEXT,
   location TEXT,
   invitee_email TEXT,
+  meeting_id TEXT,
+  host_email TEXT,
+  waiting_room_enabled INTEGER NOT NULL DEFAULT 0,
+  ai_summary_sent_at INTEGER,
+  ai_summary_session_id TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL DEFAULT 0,
   dp_task_id TEXT,
@@ -50,12 +60,20 @@ export const ensureEventsSchema = async (env: Env): Promise<void> => {
   const additions = [
     ["location", `ALTER TABLE cal_event ADD COLUMN location TEXT`],
     ["invitee_email", `ALTER TABLE cal_event ADD COLUMN invitee_email TEXT`],
+    ["meeting_id", `ALTER TABLE cal_event ADD COLUMN meeting_id TEXT`],
+    ["host_email", `ALTER TABLE cal_event ADD COLUMN host_email TEXT`],
+    ["waiting_room_enabled", `ALTER TABLE cal_event ADD COLUMN waiting_room_enabled INTEGER NOT NULL DEFAULT 0`],
+    ["ai_summary_sent_at", `ALTER TABLE cal_event ADD COLUMN ai_summary_sent_at INTEGER`],
+    ["ai_summary_session_id", `ALTER TABLE cal_event ADD COLUMN ai_summary_session_id TEXT`],
   ] as const;
   for (const [column, statement] of additions) {
     if (!columns.has(column)) {
       await env.DB.prepare(statement).run();
     }
   }
+  await env.DB.prepare(
+    `CREATE INDEX IF NOT EXISTS cal_event_meeting_idx ON cal_event (meeting_id)`
+  ).run();
 };
 
 export const listEventsInRange = async (
@@ -70,6 +88,17 @@ export const listEventsInRange = async (
     .bind(userId, startDate, endDate)
     .all<CalEvent>();
   return results ?? [];
+};
+
+export const getEventByMeetingId = async (
+  env: Env,
+  meetingId: string
+): Promise<CalEvent | null> => {
+  return await env.DB.prepare(
+    `SELECT * FROM cal_event WHERE meeting_id = ? ORDER BY created_at DESC LIMIT 1`
+  )
+    .bind(meetingId)
+    .first<CalEvent>();
 };
 
 export const getEventById = async (
@@ -94,12 +123,16 @@ export const createEvent = async (
     description?: string | null;
     location?: string | null;
     invitee_email?: string | null;
+    meeting_id?: string | null;
+    host_email?: string | null;
+    waiting_room_enabled?: boolean | number | null;
   }
 ): Promise<CalEvent> => {
   const id = randomId();
   const now = Date.now();
+  const waitingRoomEnabled = input.waiting_room_enabled ? 1 : 0;
   await env.DB.prepare(
-    `INSERT INTO cal_event (id, user_id, event_date, start_time, title, description, location, invitee_email, created_at, updated_at, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
+    `INSERT INTO cal_event (id, user_id, event_date, start_time, title, description, location, invitee_email, meeting_id, host_email, waiting_room_enabled, created_at, updated_at, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
   )
     .bind(
       id,
@@ -110,6 +143,9 @@ export const createEvent = async (
       input.description ?? null,
       input.location ?? null,
       input.invitee_email ?? null,
+      input.meeting_id ?? null,
+      input.host_email ?? null,
+      waitingRoomEnabled,
       now,
       now
     )
@@ -123,6 +159,11 @@ export const createEvent = async (
     description: input.description ?? null,
     location: input.location ?? null,
     invitee_email: input.invitee_email ?? null,
+    meeting_id: input.meeting_id ?? null,
+    host_email: input.host_email ?? null,
+    waiting_room_enabled: waitingRoomEnabled,
+    ai_summary_sent_at: null,
+    ai_summary_session_id: null,
     created_at: now,
     updated_at: now,
     dp_task_id: null,
@@ -145,4 +186,16 @@ export const deleteEvent = async (
     .bind(id, userId)
     .run();
   return { deleted: true, dp_task_id: existing.dp_task_id };
+};
+
+export const markMeetingSummarySent = async (
+  env: Env,
+  eventId: string,
+  sessionId: string | null
+): Promise<void> => {
+  await env.DB.prepare(
+    `UPDATE cal_event SET ai_summary_sent_at = ?, ai_summary_session_id = ?, updated_at = ? WHERE id = ?`
+  )
+    .bind(Date.now(), sessionId, Date.now(), eventId)
+    .run();
 };

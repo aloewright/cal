@@ -26,6 +26,7 @@
     "wrangler": "^4.92.0"
   },
   "dependencies": {
+    "@cloudflare/realtimekit-virtual-background": "^0.0.2",
     "better-auth": "^1.6.11"
   }
 }

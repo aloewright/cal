@@ -42,7 +42,21 @@ describe("createRealtimeKitMeeting", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body).toEqual({
       title: "Planning",
+      persist_chat: true,
       record_on_start: true,
+      transcribe_on_end: true,
+      summarize_on_end: true,
+      ai_config: {
+        transcription: {
+          language: "en",
+          profanity_filter: true,
+        },
+        summarization: {
+          summary_type: "team_meeting",
+          text_format: "markdown",
+          word_limit: 500,
+        },
+      },
       recording_config: {
         video_config: { export_file: true, codec: "H264" },
       },

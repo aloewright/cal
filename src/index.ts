@@ -5,10 +5,20 @@ import {
   createEvent,
   deleteEvent,
   ensureEventsSchema,
+  getEventByMeetingId,
   listEventsInRange,
+  markMeetingSummarySent,
 } from "./events";
-import { isValidEmail, sendCalendarInvite } from "./invitations";
-import { addRealtimeKitParticipant, createRealtimeKitMeeting } from "./realtimekit";
+import { isValidEmail, sendCalendarInvite, sendMeetingSummaryEmail } from "./invitations";
+import {
+  addRealtimeKitParticipant,
+  createRealtimeKitMeeting,
+  ensureRealtimeKitWebhook,
+  ensureRealtimeKitWaitingRoomPreset,
+  getActiveRealtimeKitRecording,
+  startRealtimeKitRecording,
+  updateRealtimeKitRecording,
+} from "./realtimekit";
 import { reconcile } from "./reconcile";
 import { handleSyncWebhook, sendWebhook } from "./sync";
 import { loginPage, meetingPage, monthView } from "./views";
@@ -27,6 +37,123 @@ const html = (body: string, status = 200): Response =>
       "cache-control": "no-store, must-revalidate",
     },
   });
+
+const escapeSummaryText = (value: string): string => value.slice(0, 18000);
+
+const summaryWebhookToken = (env: Env): string | undefined =>
+  env.REALTIMEKIT_WEBHOOK_SECRET || env.BETTER_AUTH_SECRET;
+
+const webhookUrl = (env: Env, origin: string): string => {
+  const base = env.BETTER_AUTH_URL || origin;
+  const url = new URL("/api/realtimekit/webhook", base);
+  const token = summaryWebhookToken(env);
+  if (token) url.searchParams.set("token", token);
+  return url.toString();
+};
+
+const readDownloadText = async (downloadUrl?: string | null): Promise<string | null> => {
+  if (!downloadUrl) return null;
+  const response = await fetch(downloadUrl);
+  if (!response.ok) return null;
+  const text = await response.text();
+  try {
+    const parsed = JSON.parse(text) as {
+      summary?: unknown;
+      text?: unknown;
+      transcript?: unknown;
+      data?: { summary?: unknown; text?: unknown; transcript?: unknown };
+    };
+    const value =
+      parsed.summary ??
+      parsed.text ??
+      parsed.transcript ??
+      parsed.data?.summary ??
+      parsed.data?.text ??
+      parsed.data?.transcript;
+    if (typeof value === "string") return value;
+  } catch {
+    // Plain text summaries are expected.
+  }
+  return text;
+};
+
+const runWorkersAiSummary = async (
+  env: Env,
+  eventTitle: string,
+  realtimeKitSummary: string,
+  transcript: string | null
+): Promise<string> => {
+  try {
+    const content = [
+      `RealtimeKit summary:\n${realtimeKitSummary}`,
+      transcript ? `Transcript excerpt:\n${transcript.slice(0, 12000)}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    const response = (await env.AI.run("@cf/meta/llama-3.1-8b-instruct" as never, {
+      messages: [
+        {
+          role: "system",
+          content:
+            "Write concise post-meeting notes in Markdown for the meeting host. Include key points, decisions, and action items. Do not invent details.",
+        },
+        {
+          role: "user",
+          content: `Meeting: ${eventTitle}\n\n${content}`,
+        },
+      ],
+    } as never)) as { response?: string };
+    return response.response?.trim() || realtimeKitSummary;
+  } catch (err) {
+    console.error("[realtimekit] Workers AI summary failed", err);
+    return realtimeKitSummary;
+  }
+};
+
+const handleRealtimeKitWebhook = async (env: Env, request: Request): Promise<Response> => {
+  const url = new URL(request.url);
+  const expectedToken = summaryWebhookToken(env);
+  const authHeader = request.headers.get("authorization") ?? "";
+  const bearer = authHeader.toLowerCase().startsWith("bearer ")
+    ? authHeader.slice("bearer ".length)
+    : "";
+  if (expectedToken && url.searchParams.get("token") !== expectedToken && bearer !== expectedToken) {
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  const payload = (await request.json().catch(() => null)) as {
+    event?: string;
+    meetingId?: string;
+    sessionId?: string;
+    summaryDownloadUrl?: string;
+    transcriptDownloadUrl?: string;
+  } | null;
+  if (!payload?.event || !payload.meetingId) return json({ error: "invalid webhook" }, 400);
+  if (payload.event !== "meeting.summary") return json({ ok: true, ignored: payload.event });
+
+  await ensureEventsSchema(env);
+  const event = await getEventByMeetingId(env, payload.meetingId);
+  if (!event) return json({ ok: true, skipped: "event not found" });
+  if (
+    (payload.sessionId && event.ai_summary_session_id === payload.sessionId) ||
+    (!payload.sessionId && event.ai_summary_sent_at)
+  ) {
+    return json({ ok: true, skipped: "already sent" });
+  }
+
+  const realtimeKitSummary = await readDownloadText(payload.summaryDownloadUrl);
+  if (!realtimeKitSummary) return json({ error: "summary unavailable" }, 502);
+  const transcript = await readDownloadText(payload.transcriptDownloadUrl);
+  const summary = await runWorkersAiSummary(
+    env,
+    event.title,
+    escapeSummaryText(realtimeKitSummary),
+    transcript ? escapeSummaryText(transcript) : null
+  );
+  await sendMeetingSummaryEmail(env, event, summary, payload.transcriptDownloadUrl ?? null);
+  await markMeetingSummarySent(env, event.id, payload.sessionId ?? null);
+  return json({ ok: true });
+};
 
 
 const appendSetCookieHeaders = (target: Headers, source: Headers): void => {
@@ -181,7 +308,7 @@ export default {
       })()
     );
   },
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/health") {
       return json({ ok: true });
@@ -248,6 +375,10 @@ export default {
 
     if (url.pathname === "/sync/webhook" && request.method === "POST") {
       return handleSyncWebhook(env, request);
+    }
+
+    if (url.pathname === "/api/realtimekit/webhook" && request.method === "POST") {
+      return handleRealtimeKitWebhook(env, request);
     }
 
     if (url.pathname === "/admin/reconcile" && request.method === "POST") {
@@ -321,6 +452,7 @@ export default {
         return json(events);
       }
       if (request.method === "POST") {
+        await ensureEventsSchema(env);
         const body = (await request.json().catch(() => null)) as {
           event_date?: string;
           title?: string;
@@ -328,6 +460,8 @@ export default {
           description?: string | null;
           location?: string | null;
           invitee_email?: string | null;
+          meeting_id?: string | null;
+          waiting_room_enabled?: boolean | number | null;
         } | null;
         if (!body || !body.event_date || !isValidDate(body.event_date) || !body.title) {
           return json({ error: "invalid input" }, 400);
@@ -343,6 +477,9 @@ export default {
           description: body.description ?? null,
           location: body.location ? body.location.slice(0, 500) : null,
           invitee_email: inviteeEmail ? inviteeEmail.slice(0, 320) : null,
+          meeting_id: body.meeting_id ? body.meeting_id.slice(0, 80) : null,
+          host_email: session.user.email,
+          waiting_room_enabled: Boolean(body.waiting_room_enabled),
         });
         let invite: { sent: boolean; error?: string } | undefined;
         if (created.invitee_email) {
@@ -387,10 +524,19 @@ export default {
       if (!session) return json({ error: "unauthorized" }, 401);
       const body = (await request.json().catch(() => null)) as {
         title?: string;
+        waiting_room_enabled?: boolean;
       } | null;
       const title = (body?.title || "Calendar video call").slice(0, 100);
       try {
+        if (body?.waiting_room_enabled) {
+          await ensureRealtimeKitWaitingRoomPreset(env);
+        }
         const meeting = await createRealtimeKitMeeting(env, title);
+        ctx.waitUntil(
+          ensureRealtimeKitWebhook(env, webhookUrl(env, url.origin)).catch((err) => {
+            console.error("[realtimekit] webhook setup failed", err);
+          })
+        );
         return json({
           meetingId: meeting.id,
           url: new URL(`/meet/${meeting.id}`, url).toString(),
@@ -411,16 +557,25 @@ export default {
       const meetingId = url.pathname.slice("/meet/".length);
       if (!meetingId) return new Response("Not found", { status: 404 });
       const guestEmail = url.searchParams.get("email")?.trim() ?? "";
+      await ensureEventsSchema(env);
+      const event = await getEventByMeetingId(env, meetingId);
       if (!session && !isValidEmail(guestEmail)) {
         return html(loginPage("signin", "Sign in to join the video call"), 401);
       }
       try {
+        const isHost = Boolean(
+          session &&
+            event &&
+            (event.user_id === session.user.id || event.host_email === session.user.email)
+        );
         const participant = await addRealtimeKitParticipant(env, meetingId, {
           id: session?.user.id ?? "guest",
           email: session?.user.email ?? guestEmail,
           name: session?.user.name ?? guestEmail,
+          role: isHost ? "host" : "participant",
+          waitingRoomEnabled: Boolean(event?.waiting_room_enabled),
         });
-        return html(meetingPage(participant.token));
+        return html(meetingPage({ authToken: participant.token, meetingId, isHost }));
       } catch (err) {
         console.error("[realtimekit] join call failed", err);
         return html(
@@ -428,6 +583,40 @@ export default {
             "signin",
             err instanceof Error ? err.message : "Could not join video call"
           ),
+          502
+        );
+      }
+    }
+
+    if (url.pathname.startsWith("/api/realtimekit/recording/") && request.method === "POST") {
+      if (!session) return json({ error: "unauthorized" }, 401);
+      const parts = url.pathname.split("/");
+      const meetingId = parts[4];
+      const action = parts[5] as "start" | "pause" | "resume" | "stop" | undefined;
+      if (!meetingId || !action) return json({ error: "missing recording action" }, 400);
+      await ensureEventsSchema(env);
+      const event = await getEventByMeetingId(env, meetingId);
+      const isHost = Boolean(event && (event.user_id === session.user.id || event.host_email === session.user.email));
+      if (!isHost) return json({ error: "forbidden" }, 403);
+      try {
+        if (action === "start") {
+          const recording = await startRealtimeKitRecording(env, meetingId);
+          return json({ recording });
+        }
+        if (action === "pause" || action === "resume" || action === "stop") {
+          const active = await getActiveRealtimeKitRecording(env, meetingId);
+          if (!active) return json({ error: "no active recording" }, 404);
+          const recording = await updateRealtimeKitRecording(env, active.id, action);
+          return json({ recording });
+        }
+        return json({ error: "invalid recording action" }, 400);
+      } catch (err) {
+        console.error("[realtimekit] recording action failed", err);
+        return json(
+          {
+            error:
+              err instanceof Error ? err.message : "Could not update recording",
+          },
           502
         );
       }
