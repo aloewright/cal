@@ -15,6 +15,8 @@ jobs:
     name: Deploy cal.fly.pm
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      HAS_CLOUDFLARE_DEPLOY_CREDS: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
 
     steps:
       - name: Check out repository
@@ -39,8 +41,13 @@ jobs:
         run: npm test
 
       - name: Deploy Worker
-        uses: cloudflare/wrangler-action@v3
+        if: env.HAS_CLOUDFLARE_DEPLOY_CREDS == 'true'
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
+
+      - name: Skip Worker deploy
+        if: env.HAS_CLOUDFLARE_DEPLOY_CREDS != 'true'
+        run: echo "Skipping CI deploy because Cloudflare deployment secrets are not configured."
