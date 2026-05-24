@@ -61,7 +61,7 @@ npm test
 
 - Unit tests cover rendered HTML, escaping, calendar grid structure, and restored icon metadata.
 - Interaction tests execute the inline calendar script in a DOM environment and cover day-dialog event loading and add-event submission.
-- E2E tests start `wrangler dev` on port 8788 and verify the unauthenticated auth page plus logo/favicon asset aliases in desktop and mobile Chromium contexts.
+- E2E tests start a small local HTTP harness on port 8788 and verify the unauthenticated auth page plus logo/favicon asset aliases in desktop and mobile Chromium contexts.
 
 ## Health endpoints
 

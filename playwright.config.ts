@@ -19,10 +19,10 @@ export default defineConfig({
     launchOptions: executablePath ? { executablePath } : undefined,
   },
   webServer: {
-    command: "npm run dev -- --port 8788",
+    command: "tsx tests/e2e/server.ts",
     url: "http://127.0.0.1:8788/health",
     reuseExistingServer: !process.env.CI,
-    timeout: 20_000,
+    timeout: 10_000,
   },
   projects: [
     {

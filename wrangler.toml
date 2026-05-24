@@ -3,6 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2026-05-17"
 compatibility_flags = ["nodejs_compat"]
 
+[[routes]]
+pattern = "cal.fly.pm"
+custom_domain = true
+
 [vars]
 AI_GATEWAY_ACCOUNT_ID = "85d376fc54617bcb57185547f08e528b"
 AI_GATEWAY_NAME = "x"

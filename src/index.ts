@@ -183,9 +183,25 @@ export default {
   },
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const auth = createAuth(env);
+    if (url.pathname === "/health") {
+      return json({ ok: true });
+    }
+
+    if (url.pathname === "/cloudflare/status") {
+      return json({
+        d1Binding: Boolean(env.DB),
+        r2Binding: Boolean(env.CAL_ASSETS),
+        kvBinding: Boolean(env.CAL_CACHE),
+        vectorizeBinding: Boolean(env.EMBEDDINGS_INDEX),
+        aiBinding: Boolean(env.AI),
+        aiGatewayUrl: aiGatewayUrl(env),
+      });
+    }
+
     const staticResponse = await staticAssetResponse(url);
     if (staticResponse) return staticResponse;
+
+    const auth = createAuth(env);
 
     if (url.pathname.startsWith("/api/auth/")) {
       return auth.handler(request);
@@ -241,21 +257,6 @@ export default {
       }
       const result = await reconcile(env);
       return json(result);
-    }
-
-    if (url.pathname === "/health") {
-      return json({ ok: true });
-    }
-
-    if (url.pathname === "/cloudflare/status") {
-      return json({
-        d1Binding: Boolean(env.DB),
-        r2Binding: Boolean(env.CAL_ASSETS),
-        kvBinding: Boolean(env.CAL_CACHE),
-        vectorizeBinding: Boolean(env.EMBEDDINGS_INDEX),
-        aiBinding: Boolean(env.AI),
-        aiGatewayUrl: aiGatewayUrl(env),
-      });
     }
 
     if (url.pathname === "/admin/migrate" && request.method === "POST") {
